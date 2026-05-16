@@ -30,6 +30,10 @@ export function DiameterPage() {
   const [bulkText, setBulkText] = useState('');
   const [inputMode, setInputMode] = useState<'form' | 'bulk'>('form');
 
+  // Generated JSON
+  const [proxiesJson, setProxiesJson] = useState('');
+  const [peersJson, setPeersJson] = useState('');
+
   // Current
   const [proxiesOutput, setProxiesOutput] = useState('');
   const [peersOutput, setPeersOutput] = useState('');
@@ -52,7 +56,6 @@ export function DiameterPage() {
   }
 
   function parseBulkText(): DiameterEntry[] {
-    // Format: interface | host | realm
     return bulkText.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
       const parts = line.split('|').map(p => p.trim());
       return { interface: parts[0] || 'Gy', host: parts[1] || '', realm: parts[2] || '' };
@@ -63,7 +66,7 @@ export function DiameterPage() {
     return inputMode === 'form' ? entries.filter(e => e.host) : parseBulkText();
   }
 
-  async function handleDeploy() {
+  async function generateJson() {
     const valid = getEntries();
     if (valid.length === 0) {
       setPopup({ type: 'error', message: 'No valid entries. Each needs at least a host.' });
@@ -71,29 +74,89 @@ export function DiameterPage() {
     }
 
     setLoading(true);
+
+    // Fetch existing proxies and peers
+    let existingProxies: any[] = [];
+    let existingPeers: any[] = [];
     try {
-      const proxies = valid.filter(e => e.realm).map(e => ({
-        appGrp, host: e.host, realm: e.realm, port, scheme, transport,
-      }));
+      const pxResult = await getDiameterProxies(appGrp);
+      if (pxResult.job?.stdout) {
+        try { existingProxies = JSON.parse(pxResult.job.stdout); } catch {}
+      }
+    } catch {}
+    try {
+      const prResult = await getDiameterPeers(appGrp);
+      if (prResult.job?.stdout) {
+        try { existingPeers = JSON.parse(prResult.job.stdout); } catch {}
+      }
+    } catch {}
+    if (!Array.isArray(existingProxies)) existingProxies = [];
+    if (!Array.isArray(existingPeers)) existingPeers = [];
 
-      const peers = addPeers ? valid.map(e => ({
-        appGrp, host: e.host, port, scheme, transport,
-        initiateConnection: initiate, raiseAlarm,
-      })) : [];
+    // Build new proxies — one entry per unique (host, realm) pair
+    // Multiple peers can share the same realm; only create one proxy per realm
+    const newProxies: any[] = [];
+    valid.filter(e => e.realm).forEach(e => {
+      const existsByRealm = newProxies.find(p => p.realm === e.realm);
+      if (!existsByRealm) {
+        newProxies.push({ appGrp, host: e.host, realm: e.realm, port, scheme, transport, interface: e.interface });
+      }
+    });
 
-      // Deduplicate peers by host
-      const uniquePeers = peers.filter((p, i, arr) => arr.findIndex(x => x.host === p.host) === i);
+    // Build new peers — one entry per unique host
+    const seenHosts = new Set<string>();
+    const newPeers: any[] = [];
+    if (addPeers) {
+      valid.forEach(e => {
+        if (!seenHosts.has(e.host)) {
+          seenHosts.add(e.host);
+          newPeers.push({
+            appGrp, host: e.host, port, scheme, transport,
+            initiateConnection: initiate, raiseAlarm,
+          });
+        }
+      });
+    }
 
-      const result = await diameterBulkAdd({ proxies, peers: uniquePeers });
+    // Merge: existing + new (deduplicate proxies by realm, peers by host)
+    const mergedProxies = [...existingProxies];
+    newProxies.forEach(np => {
+      const exists = mergedProxies.find(p => p.realm === np.realm);
+      if (!exists) mergedProxies.push(np);
+    });
+
+    const mergedPeers = [...existingPeers];
+    newPeers.forEach(np => {
+      const exists = mergedPeers.find(p => p.host === np.host);
+      if (!exists) mergedPeers.push(np);
+    });
+
+    setProxiesJson(JSON.stringify(mergedProxies, null, 2));
+    setPeersJson(JSON.stringify(mergedPeers, null, 2));
+    setLoading(false);
+  }
+
+  async function handleDeploy() {
+    if (!proxiesJson.trim() && !peersJson.trim()) {
+      setPopup({ type: 'error', message: 'Generate JSON first' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const proxies = proxiesJson.trim() ? JSON.parse(proxiesJson) : [];
+      const peers = peersJson.trim() ? JSON.parse(peersJson) : [];
+
+      const result = await diameterBulkAdd({ proxies, peers });
 
       const failedCount = (result.results?.proxies || []).filter((r: any) => r.status === 'failed').length
         + (result.results?.peers || []).filter((r: any) => r.status === 'failed').length;
-      const totalCount = proxies.length + uniquePeers.length;
+      const totalCount = proxies.length + peers.length;
 
       if (failedCount > 0) {
         setPopup({ type: 'error', message: `${failedCount}/${totalCount} operations failed. Check Jobs for details.` });
       } else {
-        setPopup({ type: 'success', message: `Deployed ${proxies.length} proxy(s) and ${uniquePeers.length} peer(s)` });
+        setPopup({ type: 'success', message: `Deployed ${proxies.length} proxy(s) and ${peers.length} peer(s)` });
       }
     } catch (e: any) {
       setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
@@ -111,36 +174,6 @@ export function DiameterPage() {
     } catch (e: any) {
       setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
     }
-    setLoading(false);
-  }
-
-  async function handleRemoveProxy(host: string, realm: string) {
-    if (!confirm(`Remove proxy ${host} (${realm})?`)) return;
-    setLoading(true);
-    try {
-      const result = await removeDiameterProxy({ appGrp, host, realm });
-      if (result.job?.status === 'failed') {
-        setPopup({ type: 'error', message: 'Remove failed', jobId: result.job.id });
-      } else {
-        setPopup({ type: 'success', message: `Proxy ${host} removed`, jobId: result.job?.id });
-        handleListCurrent();
-      }
-    } catch (e: any) { setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) }); }
-    setLoading(false);
-  }
-
-  async function handleRemovePeer(host: string) {
-    if (!confirm(`Remove peer ${host}?`)) return;
-    setLoading(true);
-    try {
-      const result = await removeDiameterPeer({ appGrp, host });
-      if (result.job?.status === 'failed') {
-        setPopup({ type: 'error', message: 'Remove failed', jobId: result.job.id });
-      } else {
-        setPopup({ type: 'success', message: `Peer ${host} removed`, jobId: result.job?.id });
-        handleListCurrent();
-      }
-    } catch (e: any) { setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) }); }
     setLoading(false);
   }
 
@@ -314,15 +347,43 @@ export function DiameterPage() {
             </div>
           )}
 
-          {/* Deploy */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading}>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-secondary" onClick={generateJson} disabled={loading}>
+              {loading ? 'Fetching existing...' : 'Generate JSON (merges with existing)'}
+            </button>
+            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading || (!proxiesJson.trim() && !peersJson.trim())}>
               {loading ? 'Deploying...' : 'Deploy All'}
             </button>
-            <span style={{ color: '#90a4ae', fontSize: 11, alignSelf: 'center' }}>
-              {getEntries().length} entry(s) · {getEntries().filter(e => e.realm).length} proxy(s) · {addPeers ? new Set(getEntries().map(e => e.host)).size : 0} peer(s)
-            </span>
           </div>
+
+          {/* Generated Proxies JSON */}
+          {proxiesJson && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12 }}>
+                Proxies JSON — each entry runs: <code>beamctl diameter-interface add-diameter-proxy</code>
+              </label>
+              <textarea
+                value={proxiesJson}
+                onChange={e => setProxiesJson(e.target.value)}
+                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
+              />
+            </div>
+          )}
+
+          {/* Generated Peers JSON */}
+          {peersJson && (
+            <div>
+              <label style={{ color: '#4fc3f7', fontSize: 12 }}>
+                Peers JSON — each entry runs: <code>beamctl diameter-interface add-diameter-peer</code>
+              </label>
+              <textarea
+                value={peersJson}
+                onChange={e => setPeersJson(e.target.value)}
+                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
+              />
+            </div>
+          )}
         </div>
       )}
 
