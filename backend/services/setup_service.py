@@ -40,6 +40,8 @@ async def perform_initial_setup(config: SetupConfig) -> dict:
         "beam_cli_fqdn": beam_fqdn,
         "iam_fqdn": config.iam_fqdn or f"eric-sec-access-mgmt.{config.oam_site_domain_name}",
         "certm_fqdn": config.certm_fqdn or f"eric-sec-certm.{config.oam_site_domain_name}",
+        "namespace": config.namespace or "caf",
+        "kubeconfig_path": config.kubeconfig_path or "/root/.kube/config",
         "beamctl_path": "/usr/local/bin/beamctl",
         "bamctl_path": "/usr/local/bin/bamctl",
         "setup_complete": True,

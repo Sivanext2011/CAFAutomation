@@ -43,6 +43,8 @@ class SetupConfig(BaseModel):
     beam_cli_fqdn: Optional[str] = None
     iam_fqdn: Optional[str] = None
     certm_fqdn: Optional[str] = None
+    namespace: Optional[str] = None
+    kubeconfig_path: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

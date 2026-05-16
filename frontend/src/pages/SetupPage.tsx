@@ -14,6 +14,8 @@ export function SetupPage() {
   const [bamCliFqdn, setBamCliFqdn] = useState('');
   const [iamFqdn, setIamFqdn] = useState('');
   const [certmFqdn, setCertmFqdn] = useState('');
+  const [namespace, setNamespace] = useState('caf');
+  const [kubeconfigPath, setKubeconfigPath] = useState('');
 
   // Step 2: Login
   const [username, setUsername] = useState('');
@@ -42,6 +44,8 @@ export function SetupPage() {
         bam_cli_fqdn: bamCliFqdn || undefined,
         iam_fqdn: iamFqdn || undefined,
         certm_fqdn: certmFqdn || undefined,
+        namespace: namespace || undefined,
+        kubeconfig_path: kubeconfigPath || undefined,
       });
       setSuccess('Setup completed. beamctl downloaded and FQDN configured.');
       setStep(2);
@@ -147,6 +151,26 @@ export function SetupPage() {
             </div>
 
             <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Kubernetes Configuration</label>
+              <div className="form-group" style={{ marginTop: 8 }}>
+                <label>CAF Namespace</label>
+                <input
+                  value={namespace}
+                  onChange={e => setNamespace(e.target.value)}
+                  placeholder="caf"
+                />
+              </div>
+              <div className="form-group">
+                <label>Kubeconfig Path (leave empty for in-cluster)</label>
+                <input
+                  value={kubeconfigPath}
+                  onChange={e => setKubeconfigPath(e.target.value)}
+                  placeholder="/root/.kube/config"
+                />
+              </div>
+            </div>
+
+            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
               <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Service FQDNs (optional overrides)</label>
               <div className="form-group" style={{ marginTop: 8 }}>
                 <label>IAM FQDN (default: eric-sec-access-mgmt.&lt;oamDomain&gt;)</label>
@@ -221,6 +245,8 @@ export function SetupPage() {
                 <tr><td>BAM CLI FQDN</td><td>{status?.bam_cli_fqdn || 'Default'}</td></tr>
                 <tr><td>IAM FQDN</td><td>{status?.iam_fqdn}</td></tr>
                 <tr><td>CertM FQDN</td><td>{status?.certm_fqdn}</td></tr>
+                <tr><td>Namespace</td><td>{status?.namespace || 'caf'}</td></tr>
+                <tr><td>Kubeconfig</td><td>{status?.kubeconfig_path || 'In-cluster'}</td></tr>
               </tbody>
             </table>
           </div>

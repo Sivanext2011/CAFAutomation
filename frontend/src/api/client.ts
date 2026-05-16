@@ -70,6 +70,8 @@ export const updateSdpRealms = (data: any[]) =>
 export const listSdpPeers = () => request<any>('/sdp/peers');
 export const updateSdpPeers = (data: any[]) =>
   request<any>('/sdp/peers', { method: 'POST', body: JSON.stringify(data) });
+export const checkSdpPeerStatus = (data: any) =>
+  request<any>('/sdp/check-peer-status', { method: 'POST', body: JSON.stringify(data) });
 
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
