@@ -8,6 +8,7 @@ from backend.api.deploy_routes import router as deploy_router
 from backend.api.cert_gen_routes import router as cert_gen_router
 from backend.api.sdp_routes import router as sdp_router
 from backend.api.diameter_routes import router as diameter_router
+from backend.api.scp_routes import router as scp_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -30,6 +31,7 @@ app.include_router(deploy_router)
 app.include_router(cert_gen_router)
 app.include_router(sdp_router)
 app.include_router(diameter_router)
+app.include_router(scp_router)
 app.include_router(ws_router)
 
 

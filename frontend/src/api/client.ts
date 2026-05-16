@@ -89,6 +89,23 @@ export const diameterBulkAdd = (data: any) =>
 export const setRestrictPeerList = (data: any) =>
   request<any>('/diameter/restrict-peer-list', { method: 'POST', body: JSON.stringify(data) });
 
+// SCP Integration
+export const listScpServers = (appgroup?: string) =>
+  request<any>(`/scp/servers${appgroup ? `?appgroup=${appgroup}` : ''}`);
+export const addScpServer = (data: any) =>
+  request<any>('/scp/servers', { method: 'POST', body: JSON.stringify(data) });
+export const deleteScpServer = (id: string) =>
+  request<any>(`/scp/servers/${id}`, { method: 'DELETE' });
+export const listScpAppConfig = () => request<any>('/scp/app-config');
+export const addScpAppConfig = (data: any) =>
+  request<any>('/scp/app-config', { method: 'POST', body: JSON.stringify(data) });
+export const deleteScpAppConfig = (appGroup: string) =>
+  request<any>(`/scp/app-config/${appGroup}`, { method: 'DELETE' });
+export const installScpSbiCert = (data: any) =>
+  request<any>('/scp/install-sbi-cert', { method: 'POST', body: JSON.stringify(data) });
+export const trustScpCa = (data: any) =>
+  request<any>('/scp/trust-scp-ca', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

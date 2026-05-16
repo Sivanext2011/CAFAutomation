@@ -3,6 +3,7 @@ import { SetupPage } from './pages/SetupPage';
 import { NrfPage } from './pages/NrfPage';
 import { SdpPage } from './pages/SdpPage';
 import { DiameterPage } from './pages/DiameterPage';
+import { ScpPage } from './pages/ScpPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -19,6 +20,7 @@ function App() {
             <li><NavLink to="/nrf-servers">NRF Servers</NavLink></li>
             <li><NavLink to="/sdp">SDP Integration</NavLink></li>
             <li><NavLink to="/diameter">Diameter</NavLink></li>
+            <li><NavLink to="/scp">SCP</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -29,6 +31,7 @@ function App() {
             <Route path="/nrf-servers" element={<NrfPage />} />
             <Route path="/sdp" element={<SdpPage />} />
             <Route path="/diameter" element={<DiameterPage />} />
+            <Route path="/scp" element={<ScpPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>
