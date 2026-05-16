@@ -73,6 +73,22 @@ export const updateSdpPeers = (data: any[]) =>
 export const checkSdpPeerStatus = (data: any) =>
   request<any>('/sdp/check-peer-status', { method: 'POST', body: JSON.stringify(data) });
 
+// Diameter Integration
+export const getDiameterProxies = (appGrp: string) => request<any>(`/diameter/proxies/${appGrp}`);
+export const addDiameterProxy = (data: any) =>
+  request<any>('/diameter/proxy', { method: 'POST', body: JSON.stringify(data) });
+export const removeDiameterProxy = (data: any) =>
+  request<any>('/diameter/proxy', { method: 'DELETE', body: JSON.stringify(data) });
+export const getDiameterPeers = (appGrp: string) => request<any>(`/diameter/peers/${appGrp}`);
+export const addDiameterPeer = (data: any) =>
+  request<any>('/diameter/peer', { method: 'POST', body: JSON.stringify(data) });
+export const removeDiameterPeer = (data: any) =>
+  request<any>('/diameter/peer', { method: 'DELETE', body: JSON.stringify(data) });
+export const diameterBulkAdd = (data: any) =>
+  request<any>('/diameter/bulk', { method: 'POST', body: JSON.stringify(data) });
+export const setRestrictPeerList = (data: any) =>
+  request<any>('/diameter/restrict-peer-list', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

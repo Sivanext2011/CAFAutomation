@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { SetupPage } from './pages/SetupPage';
 import { NrfPage } from './pages/NrfPage';
 import { SdpPage } from './pages/SdpPage';
+import { DiameterPage } from './pages/DiameterPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -17,6 +18,7 @@ function App() {
             <li><NavLink to="/setup">Setup</NavLink></li>
             <li><NavLink to="/nrf-servers">NRF Servers</NavLink></li>
             <li><NavLink to="/sdp">SDP Integration</NavLink></li>
+            <li><NavLink to="/diameter">Diameter</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -26,6 +28,7 @@ function App() {
             <Route path="/setup" element={<SetupPage />} />
             <Route path="/nrf-servers" element={<NrfPage />} />
             <Route path="/sdp" element={<SdpPage />} />
+            <Route path="/diameter" element={<DiameterPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>
