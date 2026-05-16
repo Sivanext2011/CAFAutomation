@@ -156,9 +156,14 @@ export function NrfServersPage() {
     if (!confirm(`Delete NRF Server ${serverId}?`)) return;
     setError(''); setSuccess('');
     try {
-      await deleteNrfServer(serverId);
-      setSuccess(`NRF Server ${serverId} deleted`);
-      loadServers();
+      const result = await deleteNrfServer(serverId);
+      const job = result.job;
+      if (job?.status === 'failed') {
+        setPopup({ type: 'error', message: `Failed to delete ${serverId}`, jobId: job.id });
+      } else {
+        setPopup({ type: 'success', message: `NRF Server ${serverId} deleted`, jobId: job?.id });
+        loadServers();
+      }
     } catch (e: any) { setError(e.message); }
   }
 
@@ -434,10 +439,57 @@ export function NrfServersPage() {
         </div>
       )}
 
-      {/* Output Console */}
-      <div className="console" style={{ marginBottom: 16 }}>
-        {servers?.job?.stdout || 'Click "Refresh" to list current NRF servers'}
-      </div>
+      {/* Server List */}
+      {servers?.job?.stdout ? (
+        <div style={{ marginBottom: 16 }}>
+          {(() => {
+            try {
+              const parsed = JSON.parse(servers.job.stdout);
+              const serverList = Array.isArray(parsed) ? parsed : parsed?.servers || parsed?.nrfServers || [parsed];
+              if (!Array.isArray(serverList) || serverList.length === 0) throw new Error('empty');
+              return (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Server ID</th>
+                      <th>Address</th>
+                      <th>Secured</th>
+                      <th>App Group</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serverList.map((srv: any, i: number) => {
+                      const id = srv.serverId || srv.id || srv.name || `server-${i}`;
+                      return (
+                        <tr key={id}>
+                          <td>{id}</td>
+                          <td>{srv.address || '-'}</td>
+                          <td>{String(srv.secured ?? '-')}</td>
+                          <td>{srv.appGrp || srv.appGroup || '-'}</td>
+                          <td>
+                            <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDelete(id)}>
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            } catch {
+              return (
+                <div className="console" style={{ whiteSpace: 'pre-wrap' }}>
+                  {servers.job.stdout}
+                </div>
+              );
+            }
+          })()}
+        </div>
+      ) : (
+        <div className="console" style={{ marginBottom: 16 }}>Click "Refresh" to list current NRF servers</div>
+      )}
 
       <button className="btn btn-secondary" onClick={loadServers}>Refresh List</button>
     </div>
