@@ -10,7 +10,7 @@ import {
   edmStaleStatus, edmStaleRemove, edmStalePublish,
 } from '../api/client';
 
-type Tab = 'transform' | 'destination' | 'snapshot' | 'asn' | 'appconfig' | 'dataformat' | 'stale';
+type Tab = 'destination' | 'snapshot' | 'transform' | 'asn' | 'appconfig' | 'dataformat' | 'stale';
 
 export function MediationPage() {
   const navigate = useNavigate();
@@ -18,10 +18,30 @@ export function MediationPage() {
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState('');
   const [popup, setPopup] = useState<{ type: 'success' | 'error'; message: string; jobId?: string } | null>(null);
+  const [jsonInput, setJsonInput] = useState('');
+
+  // Pub Destination form
+  const [partitionId, setPartitionId] = useState('1');
+  const [sftpHost, setSftpHost] = useState('');
+  const [sftpUser, setSftpUser] = useState('');
+  const [sftpPass, setSftpPass] = useState('');
+  const [sftpPort, setSftpPort] = useState('22');
+  const [sftpDestFolder, setSftpDestFolder] = useState('');
+  const [sftpErrFolder, setSftpErrFolder] = useState('');
+  const [secHost, setSecHost] = useState('');
+  const [secUser, setSecUser] = useState('');
+  const [secPass, setSecPass] = useState('');
+  const [secPort, setSecPort] = useState('22');
+  const [secDestFolder, setSecDestFolder] = useState('');
+  const [secErrFolder, setSecErrFolder] = useState('');
+  const [retryAttempts, setRetryAttempts] = useState('0');
+  const [binaryMode, setBinaryMode] = useState('false');
+  const [strictHost, setStrictHost] = useState('yes');
+  const [connTimeout, setConnTimeout] = useState('5000');
+  const [fileType, setFileType] = useState('');
 
   // Common
   const [partition, setPartition] = useState('1');
-  const [jsonInput, setJsonInput] = useState('');
   const [key, setKey] = useState('');
 
   // Transform
@@ -49,6 +69,46 @@ export function MediationPage() {
       else { setOutput(r.job?.stdout || 'Done'); if (r.job?.id) setPopup({ type: 'success', message: 'Success', jobId: r.job.id }); }
     } catch (e: any) { err(e); }
     setLoading(false);
+  }
+
+  function generateDestJson() {
+    if (!sftpHost || !sftpUser || !sftpDestFolder) {
+      setPopup({ type: 'error', message: 'Primary SFTP Host, User, and Destination Folder are required' });
+      return;
+    }
+    const config: any = {
+      sftp: {
+        commonConfig: {
+          sftpRetryAttempts: retryAttempts,
+          sftpBinaryMode: binaryMode,
+          sftpStrictHostKeyCheck: strictHost,
+          sftpConnectionTimeout: connTimeout,
+        },
+        partitionConfigs: [{
+          partitionId,
+          primaryDestination: {
+            sftpHostname: sftpHost,
+            sftpUserName: sftpUser,
+            sftpPassword: sftpPass,
+            sftpPortNumber: sftpPort,
+            sftpDestinationFolder: sftpDestFolder,
+            sftpErrorDestinationFolder: sftpErrFolder || sftpDestFolder + '_error',
+          },
+        }],
+      },
+    };
+    if (fileType) config.sftp.partitionConfigs[0].fileType = fileType;
+    if (secHost) {
+      config.sftp.partitionConfigs[0].secondaryDestination = {
+        sftpHostname: secHost,
+        sftpUserName: secUser || sftpUser,
+        sftpPassword: secPass || sftpPass,
+        sftpPortNumber: secPort,
+        sftpDestinationFolder: secDestFolder || sftpDestFolder,
+        sftpErrorDestinationFolder: secErrFolder || sftpErrFolder || sftpDestFolder + '_error',
+      };
+    }
+    setJsonInput(JSON.stringify(config, null, 2));
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -79,7 +139,7 @@ export function MediationPage() {
       )}
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-        {tabs.map(t => <button key={t.key} className={`btn ${tab === t.key ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => { setTab(t.key); setOutput(''); }}>{t.label}</button>)}
+        {tabs.map(t => <button key={t.key} className={`btn ${tab === t.key ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => { setTab(t.key); setOutput(''); setJsonInput(''); }}>{t.label}</button>)}
       </div>
 
       {/* Publishing Destination */}
@@ -91,9 +151,63 @@ export function MediationPage() {
             <button className="btn btn-secondary" onClick={() => run(() => edmDestGet(partition))} disabled={loading}>Get Config</button>
             <button className="btn btn-danger" onClick={() => { if (confirm(`Delete config for partition ${partition}?`)) run(() => edmDestDelete(partition)); }} disabled={loading}>Delete</button>
           </div>
-          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Config JSON (for add-config):</label>
-          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={8} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder="Paste destination config JSON here..." />
-          <button className="btn btn-primary" onClick={() => { try { run(() => edmDestAdd({ customerPartition: partition, payload: JSON.parse(jsonInput) })); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Upload Config</button>
+
+          {/* Form-based input */}
+          <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+            <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Add Destination Config</label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Partition ID *</label><input value={partitionId} onChange={e => setPartitionId(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>File Type (optional)</label><input value={fileType} onChange={e => setFileType(e.target.value)} placeholder="CHF, CHAD, etc." /></div>
+            </div>
+
+            {/* Primary SFTP */}
+            <label style={{ color: '#66bb6a', fontSize: 11, fontWeight: 600, marginTop: 12, display: 'block' }}>Primary SFTP Destination</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginTop: 4 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Hostname *</label><input value={sftpHost} onChange={e => setSftpHost(e.target.value)} placeholder="sftp.example.com" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Username *</label><input value={sftpUser} onChange={e => setSftpUser(e.target.value)} placeholder="admin" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Password</label><input type="password" value={sftpPass} onChange={e => setSftpPass(e.target.value)} /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr', gap: 8, marginTop: 4 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Port</label><input value={sftpPort} onChange={e => setSftpPort(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Destination Folder *</label><input value={sftpDestFolder} onChange={e => setSftpDestFolder(e.target.value)} placeholder="/home/admin/cdr/" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Error Folder</label><input value={sftpErrFolder} onChange={e => setSftpErrFolder(e.target.value)} placeholder="/home/admin/cdr_error/" /></div>
+            </div>
+
+            {/* Secondary SFTP */}
+            <label style={{ color: '#90a4ae', fontSize: 11, fontWeight: 600, marginTop: 12, display: 'block' }}>Secondary SFTP (optional)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginTop: 4 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Hostname</label><input value={secHost} onChange={e => setSecHost(e.target.value)} placeholder="sftp-backup.example.com" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Username</label><input value={secUser} onChange={e => setSecUser(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Password</label><input type="password" value={secPass} onChange={e => setSecPass(e.target.value)} /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr', gap: 8, marginTop: 4 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Port</label><input value={secPort} onChange={e => setSecPort(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Destination Folder</label><input value={secDestFolder} onChange={e => setSecDestFolder(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Error Folder</label><input value={secErrFolder} onChange={e => setSecErrFolder(e.target.value)} /></div>
+            </div>
+
+            {/* Common SFTP settings */}
+            <label style={{ color: '#90a4ae', fontSize: 11, fontWeight: 600, marginTop: 12, display: 'block' }}>SFTP Settings</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginTop: 4 }}>
+              <div className="form-group" style={{ margin: 0 }}><label>Retry Attempts</label><input value={retryAttempts} onChange={e => setRetryAttempts(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Binary Mode</label><select value={binaryMode} onChange={e => setBinaryMode(e.target.value)}><option value="false">false</option><option value="true">true</option></select></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Strict Host Key</label><select value={strictHost} onChange={e => setStrictHost(e.target.value)}><option value="yes">yes</option><option value="no">no</option></select></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Conn Timeout (ms)</label><input value={connTimeout} onChange={e => setConnTimeout(e.target.value)} /></div>
+            </div>
+
+            <button className="btn btn-secondary" onClick={generateDestJson} style={{ marginTop: 12 }}>Generate JSON</button>
+          </div>
+
+          {/* Generated JSON for review */}
+          {jsonInput && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12 }}>Generated JSON (editable — review before deploy):</label>
+              <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={10} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} />
+              <button className="btn btn-primary" onClick={() => { try { run(() => edmDestAdd({ customerPartition: partitionId, payload: JSON.parse(jsonInput) })); } catch (e) { err(e); } }} disabled={loading}>Deploy Config</button>
+            </div>
+          )}
+
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
         </div>
       )}
@@ -105,11 +219,11 @@ export function MediationPage() {
             <div className="form-group" style={{ margin: 0 }}><label>Partition</label><input value={partition} onChange={e => setPartition(e.target.value)} style={{ width: 60 }} /></div>
             <button className="btn btn-secondary" onClick={() => run(() => edmSnapshotDestList(partition))} disabled={loading}>List</button>
             <button className="btn btn-secondary" onClick={() => run(() => edmSnapshotDestGet(partition))} disabled={loading}>Get Config</button>
-            <button className="btn btn-danger" onClick={() => { if (confirm(`Delete snapshot config for partition ${partition}?`)) run(() => edmSnapshotDestDelete(partition)); }} disabled={loading}>Delete</button>
+            <button className="btn btn-danger" onClick={() => { if (confirm(`Delete?`)) run(() => edmSnapshotDestDelete(partition)); }} disabled={loading}>Delete</button>
           </div>
-          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Config JSON (for add-config):</label>
-          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={8} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder="Paste snapshot destination config JSON here..." />
-          <button className="btn btn-primary" onClick={() => { try { run(() => edmSnapshotDestAdd({ customerPartition: partition, payload: JSON.parse(jsonInput) })); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Upload Config</button>
+          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Config JSON:</label>
+          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={8} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder="Paste snapshot destination config JSON..." />
+          <button className="btn btn-primary" onClick={() => { try { run(() => edmSnapshotDestAdd({ customerPartition: partition, payload: JSON.parse(jsonInput) })); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Upload</button>
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
         </div>
       )}
@@ -144,13 +258,13 @@ export function MediationPage() {
       {tab === 'asn' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button className="btn btn-secondary" onClick={() => run(edmAsnList)} disabled={loading}>List Schemas</button>
+            <button className="btn btn-secondary" onClick={() => run(edmAsnList)} disabled={loading}>List</button>
             <button className="btn btn-secondary" onClick={() => run(edmAsnGetAll)} disabled={loading}>Get All</button>
           </div>
           <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12, maxWidth: 500 }}>
             <label style={{ color: '#ef5350', fontSize: 12, fontWeight: 600 }}>Delete Schema</label>
-            <div className="form-group" style={{ marginTop: 8 }}><label>Schema Name</label><input value={key} onChange={e => setKey(e.target.value)} placeholder="com.ericsson.bss.sys.event.schema.BssfChfCdrAsn1_1.0.0" /></div>
-            <button className="btn btn-danger" onClick={() => { if (key && confirm(`Delete schema ${key}?`)) run(() => edmAsnDelete({ schemaName: key })); }} disabled={loading || !key}>Delete</button>
+            <div className="form-group" style={{ marginTop: 8 }}><label>Schema Name</label><input value={key} onChange={e => setKey(e.target.value)} placeholder="com.ericsson.bss..." /></div>
+            <button className="btn btn-danger" onClick={() => { if (key && confirm(`Delete ${key}?`)) run(() => edmAsnDelete({ schemaName: key })); }} disabled={loading || !key}>Delete</button>
           </div>
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{output}</div>}
         </div>
@@ -160,15 +274,15 @@ export function MediationPage() {
       {tab === 'appconfig' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ margin: 0 }}><label>Key (optional)</label><input value={key} onChange={e => setKey(e.target.value)} placeholder="eventPublishingEndPoint" style={{ width: 200 }} /></div>
-            <button className="btn btn-secondary" onClick={() => run(() => edmAppConfigGet(key || undefined))} disabled={loading}>Get Pub Config</button>
-            <button className="btn btn-secondary" onClick={() => run(() => edmSnapshotAppConfigGet(key || undefined))} disabled={loading}>Get Snapshot Config</button>
+            <div className="form-group" style={{ margin: 0 }}><label>Key</label><input value={key} onChange={e => setKey(e.target.value)} placeholder="eventPublishingEndPoint" style={{ width: 200 }} /></div>
+            <button className="btn btn-secondary" onClick={() => run(() => edmAppConfigGet(key || undefined))} disabled={loading}>Get Pub</button>
+            <button className="btn btn-secondary" onClick={() => run(() => edmSnapshotAppConfigGet(key || undefined))} disabled={loading}>Get Snapshot</button>
           </div>
-          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Update JSON:</label>
-          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={4} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder='{"key": "eventPublishingEndPoint", "value": "SFTP"}' />
+          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Update:</label>
+          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={3} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder='{"key": "eventPublishingEndPoint", "value": "SFTP"}' />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" onClick={() => { try { run(() => edmAppConfigUpdate(JSON.parse(jsonInput))); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Update Pub Config</button>
-            <button className="btn btn-primary" onClick={() => { try { run(() => edmSnapshotAppConfigUpdate(JSON.parse(jsonInput))); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Update Snapshot Config</button>
+            <button className="btn btn-primary" onClick={() => { try { run(() => edmAppConfigUpdate(JSON.parse(jsonInput))); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Update Pub</button>
+            <button className="btn btn-primary" onClick={() => { try { run(() => edmSnapshotAppConfigUpdate(JSON.parse(jsonInput))); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Update Snapshot</button>
           </div>
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
         </div>
@@ -177,9 +291,9 @@ export function MediationPage() {
       {/* Data Format */}
       {tab === 'dataformat' && (
         <div>
-          <button className="btn btn-secondary" onClick={() => run(edmDataFormatGet)} disabled={loading} style={{ marginBottom: 12 }}>Get Current Config</button>
+          <button className="btn btn-secondary" onClick={() => run(edmDataFormatGet)} disabled={loading} style={{ marginBottom: 12 }}>Get Current</button>
           <label style={{ color: '#4fc3f7', fontSize: 12 }}>Update JSON:</label>
-          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={8} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder="Paste data format config JSON..." />
+          <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} rows={8} style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11, marginBottom: 8 }} placeholder="Paste data format config..." />
           <button className="btn btn-primary" onClick={() => { try { run(() => edmDataFormatUpdate(JSON.parse(jsonInput))); } catch (e) { err(e); } }} disabled={loading || !jsonInput.trim()}>Update</button>
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
         </div>
