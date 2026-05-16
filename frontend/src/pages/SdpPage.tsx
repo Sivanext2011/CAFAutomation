@@ -52,7 +52,7 @@ export function SdpPage() {
   }
 
   function parseBulkText(): SdpEntry[] {
-    // Format: realm | sdp_ids | peer_hosts (one SDP per line)
+    // Format: realm | sdp_ids | peer_hosts (one SDP per line, realm optional)
     return bulkText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
       const parts = line.split('|').map(p => p.trim());
       return {
@@ -60,20 +60,24 @@ export function SdpPage() {
         sdpIds: parts[1] || '',
         peerHosts: parts[2] || '',
       };
-    }).filter(e => e.realm);
+    }).filter(e => e.peerHosts);
   }
 
   function generateJson() {
     const source = inputMode === 'form' ? entries : parseBulkText();
-    const valid = source.filter(e => e.realm && e.peerHosts);
+    const valid = source.filter(e => e.peerHosts);
     if (valid.length === 0) {
-      setPopup({ type: 'error', message: 'No valid entries. Each needs at least a realm and peer hosts.' });
+      setPopup({ type: 'error', message: 'No valid entries. Each needs at least peer hosts.' });
       return;
     }
 
     const appList = apps.split(',').map(s => s.trim()).filter(Boolean);
-    const realms = valid.map(e => {
+    const allHosts: string[] = [];
+
+    // Build realms (only for entries that have a realm)
+    const realms = valid.filter(e => e.realm).map(e => {
       const hosts = e.peerHosts.split(',').map(h => h.trim()).filter(Boolean);
+      hosts.forEach(h => { if (!allHosts.includes(h)) allHosts.push(h); });
       const peerAddresses = hosts.map(h => `aaa://${h}:${port};transport=${transport}`);
       return {
         realm: e.realm.trim(),
@@ -85,7 +89,26 @@ export function SdpPage() {
       };
     });
 
-    setGeneratedJson(JSON.stringify(realms, null, 2));
+    // Collect peers from entries without realm too
+    valid.filter(e => !e.realm).forEach(e => {
+      e.peerHosts.split(',').map(h => h.trim()).filter(Boolean).forEach(h => {
+        if (!allHosts.includes(h)) allHosts.push(h);
+      });
+    });
+
+    // Build peers
+    const peers = allHosts.map(h => ({
+      peer: `aaa://${h}:${port};transport=${transport}`,
+      appGrp,
+      initiateConnection: initiate,
+      raiseAlarm,
+    }));
+
+    const output: any = {};
+    if (realms.length > 0) output.realms = realms;
+    output.peers = peers;
+
+    setGeneratedJson(JSON.stringify(output, null, 2));
   }
 
   async function handleDeploy() {
@@ -93,33 +116,33 @@ export function SdpPage() {
     setLoading(true);
     try {
       const payload = JSON.parse(generatedJson);
-      const result = await updateSdpRealms(payload);
-      const job = result.job;
-      if (job?.status === 'failed') {
-        setPopup({ type: 'error', message: `Deployment failed (${payload.length} realms)`, jobId: job.id });
-      } else {
-        setPopup({ type: 'success', message: `${payload.length} realm(s) deployed successfully`, jobId: job?.id });
-      }
+      const realms = payload.realms || [];
+      const peers = payload.peers || [];
+      let jobId: string | undefined;
 
-      // Also deploy peers if initiate is set
-      if (initiate) {
-        const allHosts: string[] = [];
-        const source = inputMode === 'form' ? entries : parseBulkText();
-        source.filter(e => e.peerHosts).forEach(e => {
-          e.peerHosts.split(',').map(h => h.trim()).filter(Boolean).forEach(h => {
-            if (!allHosts.includes(h)) allHosts.push(h);
-          });
-        });
-        if (allHosts.length > 0) {
-          const peers = allHosts.map(h => ({
-            peer: `aaa://${h}:${port};transport=${transport}`,
-            appGrp,
-            initiateConnection: initiate,
-            raiseAlarm,
-          }));
-          await updateSdpPeers(peers);
+      // Deploy realms if present
+      if (realms.length > 0) {
+        const result = await updateSdpRealms(realms);
+        jobId = result.job?.id;
+        if (result.job?.status === 'failed') {
+          setPopup({ type: 'error', message: `Realms deployment failed`, jobId });
+          setLoading(false);
+          return;
         }
       }
+
+      // Deploy peers
+      if (peers.length > 0) {
+        const result = await updateSdpPeers(peers);
+        jobId = result.job?.id;
+        if (result.job?.status === 'failed') {
+          setPopup({ type: 'error', message: `Peers deployment failed`, jobId });
+          setLoading(false);
+          return;
+        }
+      }
+
+      setPopup({ type: 'success', message: `Deployed ${realms.length} realm(s) and ${peers.length} peer(s)`, jobId });
     } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
@@ -299,14 +322,14 @@ export function SdpPage() {
             <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
               <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Bulk Paste (one SDP per line)</label>
               <p style={{ color: '#90a4ae', fontSize: 11, margin: '4px 0 8px' }}>
-                Format: <code style={{ color: '#4fc3f7' }}>realm | sdp_ids | peer_hosts</code> — separate multiple values with commas
+                Format: <code style={{ color: '#4fc3f7' }}>realm | sdp_ids | peer_hosts</code> — realm is optional (leave empty for peer-only)
               </p>
               <textarea
                 value={bulkText}
                 onChange={e => setBulkText(e.target.value)}
                 rows={10}
                 style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 12 }}
-                placeholder={`sdp01.realm.com | sdp01.cs., 10.216.230.37 | peer1.example.com, peer2.example.com\nsdp02.realm.com | sdp02.cs. | peer3.example.com, peer4.example.com\nsdp03.realm.com | sdp03.cs., 10.216.230.40 | 10.1.1.1, 10.1.1.2`}
+                placeholder={`sdp01.realm.com | sdp01.cs., 10.216.230.37 | peer1.example.com, peer2.example.com\nsdp02.realm.com | sdp02.cs. | peer3.example.com, peer4.example.com\n| | 10.1.1.5, 10.1.1.6`}
               />
               <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 4 }}>
                 {parseBulkText().length} SDP(s) detected
