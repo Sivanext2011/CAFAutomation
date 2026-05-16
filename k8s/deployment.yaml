@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: caf-automation-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caf-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: caf-backend
+  template:
+    metadata:
+      labels:
+        app: caf-backend
+    spec:
+      containers:
+        - name: backend
+          image: caf-automation-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATA_DIR
+              value: /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: caf-automation-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caf-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: caf-frontend
+  template:
+    metadata:
+      labels:
+        app: caf-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: caf-automation-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caf-backend
+spec:
+  selector:
+    app: caf-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caf-frontend
+spec:
+  selector:
+    app: caf-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: caf-automation-ingress
+spec:
+  rules:
+    - host: caf-automation.${OAM_SITE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caf-frontend
+                port:
+                  number: 80

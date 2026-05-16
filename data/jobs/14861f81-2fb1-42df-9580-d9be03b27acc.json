@@ -1,0 +1,11 @@
+{
+  "id": "14861f81-2fb1-42df-9580-d9be03b27acc",
+  "command": "/usr/local/bin/beamctl nrf-config list-registration-properties",
+  "status": "failed",
+  "stdout": "",
+  "stderr": "",
+  "created_at": "2026-05-16T15:55:32.522312",
+  "completed_at": "2026-05-16T15:55:32.688505",
+  "operation": "list-registration-properties",
+  "input_payload": null
+}

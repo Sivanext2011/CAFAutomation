@@ -1,0 +1,11 @@
+{
+  "id": "919ff047-d96d-40e9-9433-62695316c120",
+  "command": "/usr/local/bin/beamctl nf-profile-config list-nf-profile-config",
+  "status": "failed",
+  "stdout": "",
+  "stderr": "",
+  "created_at": "2026-05-15T14:32:05.753546",
+  "completed_at": "2026-05-15T14:32:05.764408",
+  "operation": "list-nf-profile-config",
+  "input_payload": null
+}

@@ -1,0 +1,11 @@
+{
+  "id": "29032ec5-643a-49fa-ac65-ad80a6057e14",
+  "command": "/usr/local/bin/beamctl nrf-config list-nrf-servers",
+  "status": "failed",
+  "stdout": "",
+  "stderr": "",
+  "created_at": "2026-05-16T15:55:17.663085",
+  "completed_at": "2026-05-16T15:55:17.847098",
+  "operation": "list-nrf-servers",
+  "input_payload": null
+}

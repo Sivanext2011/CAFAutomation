@@ -1,0 +1,22 @@
+{
+  "id": "93898af4-8493-4139-a238-2ee98b01bf48",
+  "command": "/usr/local/bin/beamctl nrf-config add-nrf-server",
+  "status": "failed",
+  "stdout": "",
+  "stderr": "",
+  "created_at": "2026-05-16T16:38:38.966947",
+  "completed_at": "2026-05-16T16:38:38.992853",
+  "operation": "deploy-nrf-server",
+  "input_payload": {
+    "address": "https://test.com:8080",
+    "secured": true,
+    "compression": true,
+    "nfProfileValidation": true,
+    "nfServiceType": "nfservices",
+    "appGrp": "global",
+    "failureCodes": [
+      404,
+      500
+    ]
+  }
+}

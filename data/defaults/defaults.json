@@ -1,0 +1,37 @@
+{
+  "nrf_server": {
+    "secured": true,
+    "compression": true,
+    "nfProfileValidation": true,
+    "nfServiceType": "nfservices",
+    "appGrp": "global",
+    "failureCodes": [404, 500]
+  },
+  "nrf_oauth_server": {
+    "secured": true,
+    "appGrp": "global",
+    "failureCodes": [404, 500]
+  },
+  "registration_properties": {
+    "nfRegistrationScope": "nnrf-nfm",
+    "retriesForNrfConnection": 3,
+    "retryIntervalForNrfConnection": 30,
+    "targetNfType": "NRF",
+    "responseTimeout": 1000,
+    "connectionTimeout": 10
+  },
+  "security_profile": {
+    "nrf": { "secured": true },
+    "oauth": { "enabled": false, "secured": true },
+    "mtls": false,
+    "customer_pki": false
+  },
+  "deployment_scenarios": {
+    "1": { "nrf_secured": false, "oauth_enabled": false, "description": "HTTP NRF, No OAuth — Basic lab setup" },
+    "2": { "nrf_secured": false, "oauth_enabled": true, "oauth_secured": false, "description": "HTTP NRF, OAuth over HTTP — Fully insecure lab" },
+    "3": { "nrf_secured": false, "oauth_enabled": true, "oauth_secured": true, "description": "HTTP NRF, OAuth over HTTPS — Common transitional" },
+    "4": { "nrf_secured": true, "oauth_enabled": false, "description": "HTTPS NRF, No OAuth — TLS-only deployment" },
+    "5": { "nrf_secured": true, "oauth_enabled": true, "oauth_secured": false, "description": "HTTPS NRF, OAuth over HTTP — Rare/mixed" },
+    "6": { "nrf_secured": true, "oauth_enabled": true, "oauth_secured": true, "description": "HTTPS NRF, OAuth over HTTPS — Typical production" }
+  }
+}
