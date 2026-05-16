@@ -63,6 +63,14 @@ export const generateSelfSignedCert = (data: any) =>
 export const generateCsr = (data: any) =>
   request<any>('/certs/csr', { method: 'POST', body: JSON.stringify(data) });
 
+// SDP Integration (External Rating)
+export const listSdpRealms = () => request<any>('/sdp/realms');
+export const updateSdpRealms = (data: any[]) =>
+  request<any>('/sdp/realms', { method: 'POST', body: JSON.stringify(data) });
+export const listSdpPeers = () => request<any>('/sdp/peers');
+export const updateSdpPeers = (data: any[]) =>
+  request<any>('/sdp/peers', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
