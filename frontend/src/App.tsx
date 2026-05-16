@@ -5,6 +5,7 @@ import { SdpPage } from './pages/SdpPage';
 import { DiameterPage } from './pages/DiameterPage';
 import { ScpPage } from './pages/ScpPage';
 import { SubAcctLocPage } from './pages/SubAcctLocPage';
+import { MediationPage } from './pages/MediationPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -23,6 +24,7 @@ function App() {
             <li><NavLink to="/diameter">Diameter</NavLink></li>
             <li><NavLink to="/scp">SCP</NavLink></li>
             <li><NavLink to="/sub-acct-loc">Account Location</NavLink></li>
+            <li><NavLink to="/mediation">Mediation</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -35,6 +37,7 @@ function App() {
             <Route path="/diameter" element={<DiameterPage />} />
             <Route path="/scp" element={<ScpPage />} />
             <Route path="/sub-acct-loc" element={<SubAcctLocPage />} />
+            <Route path="/mediation" element={<MediationPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

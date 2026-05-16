@@ -130,6 +130,51 @@ export const deleteSubAcctLoc = (sdpName: string) =>
 export const bulkCreateSubAcctLoc = (data: any[]) =>
   request<any>('/sub-acct-loc/bulk', { method: 'POST', body: JSON.stringify(data) });
 
+// Mediation (EDM)
+export const edmTransformList = (schemaName?: string) =>
+  request<any>(`/mediation/transform/list${schemaName ? `?schema_name=${schemaName}` : ''}`);
+export const edmTransformActive = () => request<any>('/mediation/transform/active');
+export const edmTransformActivate = (data: any) =>
+  request<any>('/mediation/transform/activate', { method: 'POST', body: JSON.stringify(data) });
+export const edmTransformDelete = (data: any) =>
+  request<any>('/mediation/transform/delete', { method: 'POST', body: JSON.stringify(data) });
+export const edmDestList = (partition?: string) =>
+  request<any>(`/mediation/destination/list${partition ? `?customer_partition=${partition}` : ''}`);
+export const edmDestGet = (partition?: string) =>
+  request<any>(`/mediation/destination/get${partition ? `?customer_partition=${partition}` : ''}`);
+export const edmDestAdd = (data: any) =>
+  request<any>('/mediation/destination/add', { method: 'POST', body: JSON.stringify(data) });
+export const edmDestDelete = (partition: string, fileType?: string) =>
+  request<any>(`/mediation/destination/${partition}${fileType ? `?file_type=${fileType}` : ''}`, { method: 'DELETE' });
+export const edmSnapshotDestList = (partition?: string) =>
+  request<any>(`/mediation/snapshot-dest/list${partition ? `?customer_partition=${partition}` : ''}`);
+export const edmSnapshotDestGet = (partition?: string) =>
+  request<any>(`/mediation/snapshot-dest/get${partition ? `?customer_partition=${partition}` : ''}`);
+export const edmSnapshotDestAdd = (data: any) =>
+  request<any>('/mediation/snapshot-dest/add', { method: 'POST', body: JSON.stringify(data) });
+export const edmSnapshotDestDelete = (partition: string, fileType?: string) =>
+  request<any>(`/mediation/snapshot-dest/${partition}${fileType ? `?file_type=${fileType}` : ''}`, { method: 'DELETE' });
+export const edmAsnList = () => request<any>('/mediation/asn/list');
+export const edmAsnDelete = (data: any) =>
+  request<any>('/mediation/asn/delete', { method: 'POST', body: JSON.stringify(data) });
+export const edmAsnGetAll = () => request<any>('/mediation/asn/get-all');
+export const edmAppConfigGet = (key?: string) =>
+  request<any>(`/mediation/appconfig/get${key ? `?key=${key}` : ''}`);
+export const edmAppConfigUpdate = (data: any) =>
+  request<any>('/mediation/appconfig/update', { method: 'POST', body: JSON.stringify(data) });
+export const edmSnapshotAppConfigGet = (key?: string) =>
+  request<any>(`/mediation/snapshot-appconfig/get${key ? `?key=${key}` : ''}`);
+export const edmSnapshotAppConfigUpdate = (data: any) =>
+  request<any>('/mediation/snapshot-appconfig/update', { method: 'POST', body: JSON.stringify(data) });
+export const edmDataFormatGet = () => request<any>('/mediation/dataformat/get');
+export const edmDataFormatUpdate = (data: any) =>
+  request<any>('/mediation/dataformat/update', { method: 'POST', body: JSON.stringify(data) });
+export const edmStaleStatus = () => request<any>('/mediation/stale/status');
+export const edmStaleRemove = (data: any) =>
+  request<any>('/mediation/stale/remove', { method: 'POST', body: JSON.stringify(data) });
+export const edmStalePublish = (data: any) =>
+  request<any>('/mediation/stale/publish', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

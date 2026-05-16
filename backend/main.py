@@ -10,6 +10,7 @@ from backend.api.sdp_routes import router as sdp_router
 from backend.api.diameter_routes import router as diameter_router
 from backend.api.scp_routes import router as scp_router
 from backend.api.sub_acct_loc_routes import router as sub_acct_loc_router
+from backend.api.mediation_routes import router as mediation_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -34,6 +35,7 @@ app.include_router(sdp_router)
 app.include_router(diameter_router)
 app.include_router(scp_router)
 app.include_router(sub_acct_loc_router)
+app.include_router(mediation_router)
 app.include_router(ws_router)
 
 
