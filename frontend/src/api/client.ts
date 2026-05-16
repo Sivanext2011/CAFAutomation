@@ -88,6 +88,17 @@ export const diameterBulkAdd = (data: any) =>
   request<any>('/diameter/bulk', { method: 'POST', body: JSON.stringify(data) });
 export const setRestrictPeerList = (data: any) =>
   request<any>('/diameter/restrict-peer-list', { method: 'POST', body: JSON.stringify(data) });
+export const setSendReplyUnknown = (data: any) =>
+  request<any>('/diameter/send-reply-unknown', { method: 'POST', body: JSON.stringify(data) });
+export const getDiameterAllConfig = () => request<any>('/diameter/all-config');
+export const getDiameterGlobalConfig = () => request<any>('/diameter/global-config');
+export const getDiameterAppgroups = () => request<any>('/diameter/appgroups');
+export const getDiameterAppgroup = (appGrp: string) => request<any>(`/diameter/appgroup/${appGrp}`);
+export const deleteDiameterAppgroup = (appGrp: string) =>
+  request<any>(`/diameter/appgroup/${appGrp}`, { method: 'DELETE' });
+export const addOwnDiameterIdentity = (data: any) =>
+  request<any>('/diameter/own-identity', { method: 'POST', body: JSON.stringify(data) });
+export const getOwnDiameterIdentities = (appGrp: string) => request<any>(`/diameter/own-identities/${appGrp}`);
 
 // SCP Integration
 export const listScpServers = (appgroup?: string) =>
@@ -105,6 +116,19 @@ export const installScpSbiCert = (data: any) =>
   request<any>('/scp/install-sbi-cert', { method: 'POST', body: JSON.stringify(data) });
 export const trustScpCa = (data: any) =>
   request<any>('/scp/trust-scp-ca', { method: 'POST', body: JSON.stringify(data) });
+
+// Subscriber Account Location Management
+export const listPartitions = () => request<any>('/sub-acct-loc/partitions');
+export const listAllSubAcctLoc = () => request<any>('/sub-acct-loc/configs');
+export const listSubAcctLoc = (sdpName: string) => request<any>(`/sub-acct-loc/configs/${sdpName}`);
+export const createSubAcctLoc = (data: any) =>
+  request<any>('/sub-acct-loc/configs', { method: 'POST', body: JSON.stringify(data) });
+export const editSubAcctLoc = (sdpName: string, data: any) =>
+  request<any>(`/sub-acct-loc/configs/${sdpName}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteSubAcctLoc = (sdpName: string) =>
+  request<any>(`/sub-acct-loc/configs/${sdpName}`, { method: 'DELETE' });
+export const bulkCreateSubAcctLoc = (data: any[]) =>
+  request<any>('/sub-acct-loc/bulk', { method: 'POST', body: JSON.stringify(data) });
 
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {

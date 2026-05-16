@@ -82,6 +82,66 @@ async def set_restrict(request: Request):
     )
 
 
+@router.post("/send-reply-unknown")
+async def set_send_reply(request: Request):
+    data = await request.json()
+    val = str(data.get("sendReply", True)).lower()
+    return await _run_diameter(
+        ["set-send-reply-to-unknown-peers", val],
+        operation="diameter-set-send-reply",
+        input_payload=data,
+    )
+
+
+@router.get("/all-config")
+async def get_all_config():
+    return await _run_diameter(["get-all-config"], operation="diameter-get-all-config")
+
+
+@router.get("/global-config")
+async def get_global_config():
+    return await _run_diameter(["get-global-config"], operation="diameter-get-global-config")
+
+
+@router.get("/appgroups")
+async def get_appgroups():
+    return await _run_diameter(["get-appgroups"], operation="diameter-get-appgroups")
+
+
+@router.get("/appgroup/{app_grp}")
+async def get_appgroup(app_grp: str):
+    return await _run_diameter(
+        ["get-appgroup", app_grp],
+        operation="diameter-get-appgroup",
+        input_payload={"appGrp": app_grp},
+    )
+
+
+@router.delete("/appgroup/{app_grp}")
+async def delete_appgroup(app_grp: str):
+    return await _run_diameter(
+        ["delete-appgroup", app_grp],
+        operation="diameter-delete-appgroup",
+        input_payload={"appGrp": app_grp},
+    )
+
+
+@router.post("/own-identity")
+async def add_own_identity(request: Request):
+    data = await request.json()
+    args = ["add-own-diameter-identity", data["appGrp"], str(data["dlbInstanceId"]), data["identity"]]
+    return await _run_diameter(args, operation="diameter-add-own-identity", input_payload=data)
+
+
+@router.get("/own-identities/{app_grp}")
+async def get_own_identities(app_grp: str):
+    return await _run_diameter(
+        ["get-own-diameter-identities", app_grp],
+        operation="diameter-get-own-identities",
+        input_payload={"appGrp": app_grp},
+    )
+
+
 @router.post("/bulk")
 async def bulk_add(request: Request):
     """Add multiple proxies and peers in one call."""
