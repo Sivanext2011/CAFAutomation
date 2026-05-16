@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from backend.executor import execute_command
 from backend.storage import get_state
 from typing import Optional
@@ -11,7 +11,7 @@ async def _run_external_rating(sub_command: str, stdin_json=None, operation: str
     job = await execute_command(
         command_args=command_args,
         operation=operation or f"external-rating-{sub_command}",
-        input_payload=stdin_json,
+        input_payload=stdin_json if isinstance(stdin_json, dict) else {"data": stdin_json},
         stdin_json=stdin_json,
     )
     return {"status": job.status, "job": job.model_dump()}
@@ -23,8 +23,9 @@ async def list_realms():
 
 
 @router.post("/realms")
-async def update_realms(payload: list):
+async def update_realms(request: Request):
     """Update external rating realms (replaces entire list)."""
+    payload = await request.json()
     return await _run_external_rating("update-realms", stdin_json=payload, operation="sdp-update-realms")
 
 
@@ -34,8 +35,9 @@ async def list_peers():
 
 
 @router.post("/peers")
-async def update_peers(payload: list):
+async def update_peers(request: Request):
     """Update external rating peers (replaces entire list)."""
+    payload = await request.json()
     return await _run_external_rating("update-peers", stdin_json=payload, operation="sdp-update-peers")
 
 

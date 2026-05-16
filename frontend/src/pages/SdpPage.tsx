@@ -25,12 +25,14 @@ export function SdpPage() {
   const [apps, setApps] = useState(DEFAULT_APPS);
   const [initiate, setInitiate] = useState(true);
   const [raiseAlarm, setRaiseAlarm] = useState(true);
-  const [generatedJson, setGeneratedJson] = useState('');
+  const [realmsJson, setRealmsJson] = useState('');
+  const [peersJson, setPeersJson] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [inputMode, setInputMode] = useState<'form' | 'bulk'>('form');
 
   // Current config
   const [realmsOutput, setRealmsOutput] = useState('');
+  const [peersOutput, setPeersOutput] = useState('');
 
   // Status
   const [statusOutput, setStatusOutput] = useState('');
@@ -52,18 +54,17 @@ export function SdpPage() {
   }
 
   function parseBulkText(): SdpEntry[] {
-    // Format: realm | sdp_ids | peer_hosts (one SDP per line, realm optional)
     return bulkText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
       const parts = line.split('|').map(p => p.trim());
       return {
         realm: parts[0] || '',
         sdpIds: parts[1] || '',
-        peerHosts: parts[2] || '',
+        peerHosts: parts[2] || parts[0] || '',
       };
     }).filter(e => e.peerHosts);
   }
 
-  function generateJson() {
+  async function generateJson() {
     const source = inputMode === 'form' ? entries : parseBulkText();
     const valid = source.filter(e => e.peerHosts);
     if (valid.length === 0) {
@@ -71,14 +72,37 @@ export function SdpPage() {
       return;
     }
 
-    const appList = apps.split(',').map(s => s.trim()).filter(Boolean);
-    const allHosts: string[] = [];
+    setLoading(true);
 
-    // Build realms (only for entries that have a realm)
-    const realms = valid.filter(e => e.realm).map(e => {
+    // Fetch existing realms and peers to merge
+    let existingRealms: any[] = [];
+    let existingPeers: any[] = [];
+    try {
+      const rResult = await listSdpRealms();
+      if (rResult.job?.stdout) {
+        try { existingRealms = JSON.parse(rResult.job.stdout); } catch {}
+      }
+    } catch {}
+    try {
+      const pResult = await listSdpPeers();
+      if (pResult.job?.stdout) {
+        try { existingPeers = JSON.parse(pResult.job.stdout); } catch {}
+      }
+    } catch {}
+    if (!Array.isArray(existingRealms)) existingRealms = [];
+    if (!Array.isArray(existingPeers)) existingPeers = [];
+
+    const appList = apps.split(',').map(s => s.trim()).filter(Boolean);
+    const newPeerUris: string[] = [];
+
+    // Build new realms
+    const newRealms = valid.filter(e => e.realm).map(e => {
       const hosts = e.peerHosts.split(',').map(h => h.trim()).filter(Boolean);
-      hosts.forEach(h => { if (!allHosts.includes(h)) allHosts.push(h); });
-      const peerAddresses = hosts.map(h => `aaa://${h}:${port};transport=${transport}`);
+      const peerAddresses = hosts.map(h => {
+        const uri = `aaa://${h}:${port};transport=${transport}`;
+        if (!newPeerUris.includes(uri)) newPeerUris.push(uri);
+        return uri;
+      });
       return {
         realm: e.realm.trim(),
         appGrp,
@@ -89,61 +113,87 @@ export function SdpPage() {
       };
     });
 
-    // Collect peers from entries without realm too
+    // Peer-only entries
     valid.filter(e => !e.realm).forEach(e => {
       e.peerHosts.split(',').map(h => h.trim()).filter(Boolean).forEach(h => {
-        if (!allHosts.includes(h)) allHosts.push(h);
+        const uri = `aaa://${h}:${port};transport=${transport}`;
+        if (!newPeerUris.includes(uri)) newPeerUris.push(uri);
       });
     });
 
-    // Build peers
-    const peers = allHosts.map(h => ({
-      peer: `aaa://${h}:${port};transport=${transport}`,
+    // Build new peers
+    const newPeers = newPeerUris.map(uri => ({
+      peer: uri,
       appGrp,
       initiateConnection: initiate,
       raiseAlarm,
     }));
 
-    const output: any = {};
-    if (realms.length > 0) output.realms = realms;
-    output.peers = peers;
+    // Merge: existing + new (avoid duplicate realms by realm name, peers by URI)
+    const mergedRealms = [...existingRealms];
+    newRealms.forEach(nr => {
+      const idx = mergedRealms.findIndex(r => r.realm === nr.realm);
+      if (idx >= 0) mergedRealms[idx] = nr; // replace existing
+      else mergedRealms.push(nr);
+    });
 
-    setGeneratedJson(JSON.stringify(output, null, 2));
+    const mergedPeers = [...existingPeers];
+    newPeers.forEach(np => {
+      const idx = mergedPeers.findIndex(p => p.peer === np.peer);
+      if (idx >= 0) mergedPeers[idx] = np;
+      else mergedPeers.push(np);
+    });
+
+    setRealmsJson(JSON.stringify(mergedRealms, null, 2));
+    setPeersJson(JSON.stringify(mergedPeers, null, 2));
+    setLoading(false);
   }
 
   async function handleDeploy() {
-    if (!generatedJson.trim()) { setPopup({ type: 'error', message: 'Generate JSON first' }); return; }
+    if (!realmsJson.trim() && !peersJson.trim()) {
+      setPopup({ type: 'error', message: 'Generate JSON first' });
+      return;
+    }
     setLoading(true);
     try {
-      const payload = JSON.parse(generatedJson);
-      const realms = payload.realms || [];
-      const peers = payload.peers || [];
-      let jobId: string | undefined;
+      let realmCount = 0;
+      let peerCount = 0;
+      let lastJobId: string | undefined;
 
-      // Deploy realms if present
-      if (realms.length > 0) {
-        const result = await updateSdpRealms(realms);
-        jobId = result.job?.id;
-        if (result.job?.status === 'failed') {
-          setPopup({ type: 'error', message: `Realms deployment failed`, jobId });
-          setLoading(false);
-          return;
+      // Deploy realms
+      if (realmsJson.trim()) {
+        const realms = JSON.parse(realmsJson);
+        realmCount = realms.length;
+        if (realmCount > 0) {
+          const result = await updateSdpRealms(realms);
+          lastJobId = result.job?.id;
+          if (result.job?.status === 'failed') {
+            setPopup({ type: 'error', message: 'Realms deployment failed: ' + (result.job?.stderr || ''), jobId: lastJobId });
+            setLoading(false);
+            return;
+          }
         }
       }
 
       // Deploy peers
-      if (peers.length > 0) {
-        const result = await updateSdpPeers(peers);
-        jobId = result.job?.id;
-        if (result.job?.status === 'failed') {
-          setPopup({ type: 'error', message: `Peers deployment failed`, jobId });
-          setLoading(false);
-          return;
+      if (peersJson.trim()) {
+        const peers = JSON.parse(peersJson);
+        peerCount = peers.length;
+        if (peerCount > 0) {
+          const result = await updateSdpPeers(peers);
+          lastJobId = result.job?.id;
+          if (result.job?.status === 'failed') {
+            setPopup({ type: 'error', message: 'Peers deployment failed: ' + (result.job?.stderr || ''), jobId: lastJobId });
+            setLoading(false);
+            return;
+          }
         }
       }
 
-      setPopup({ type: 'success', message: `Deployed ${realms.length} realm(s) and ${peers.length} peer(s)`, jobId });
-    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
+      setPopup({ type: 'success', message: `Deployed ${realmCount} realm(s) and ${peerCount} peer(s)`, jobId: lastJobId });
+    } catch (e: any) {
+      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
+    }
     setLoading(false);
   }
 
@@ -153,17 +203,25 @@ export function SdpPage() {
     try {
       await updateSdpRealms([]);
       await updateSdpPeers([]);
+      setRealmsJson('[]');
+      setPeersJson('[]');
       setPopup({ type: 'success', message: 'All SDP realms and peers deleted' });
-    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
+    } catch (e: any) {
+      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
+    }
     setLoading(false);
   }
 
   async function handleListCurrent() {
     setLoading(true);
     try {
-      const result = await listSdpRealms();
-      setRealmsOutput(result.job?.stdout || 'No realms configured');
-    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
+      const rResult = await listSdpRealms();
+      setRealmsOutput(rResult.job?.stdout || 'No realms configured');
+      const pResult = await listSdpPeers();
+      setPeersOutput(pResult.job?.stdout || 'No peers configured');
+    } catch (e: any) {
+      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
+    }
     setLoading(false);
   }
 
@@ -179,7 +237,9 @@ export function SdpPage() {
       } else {
         setStatusOutput(job?.stdout || 'No active sessions found');
       }
-    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
+    } catch (e: any) {
+      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
+    }
     setLoading(false);
   }
 
@@ -248,7 +308,7 @@ export function SdpPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginTop: 8 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Applications</label>
-                <input value={apps} onChange={e => setApps(e.target.value)} placeholder="16777232,16777302,16777304" />
+                <input value={apps} onChange={e => setApps(e.target.value)} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Initiate Connection</label>
@@ -269,12 +329,8 @@ export function SdpPage() {
 
           {/* Input Mode Toggle */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button className={`btn ${inputMode === 'form' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('form')}>
-              Row-by-Row
-            </button>
-            <button className={`btn ${inputMode === 'bulk' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('bulk')}>
-              Bulk Paste
-            </button>
+            <button className={`btn ${inputMode === 'form' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('form')}>Row-by-Row</button>
+            <button className={`btn ${inputMode === 'bulk' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('bulk')}>Bulk Paste</button>
           </div>
 
           {/* Row-by-Row Input */}
@@ -287,9 +343,9 @@ export function SdpPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ color: '#90a4ae', fontSize: 11 }}>
-                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '25%' }}>SDP Realm</th>
+                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '25%' }}>SDP Realm (optional)</th>
                     <th style={{ textAlign: 'left', padding: '4px 4px', width: '25%' }}>SDP IDs (comma-sep)</th>
-                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '40%' }}>Peer Hosts (comma-sep)</th>
+                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '40%' }}>Peer Hosts (comma-sep) *</th>
                     <th style={{ width: '10%' }}></th>
                   </tr>
                 </thead>
@@ -322,17 +378,17 @@ export function SdpPage() {
             <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
               <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Bulk Paste (one SDP per line)</label>
               <p style={{ color: '#90a4ae', fontSize: 11, margin: '4px 0 8px' }}>
-                Format: <code style={{ color: '#4fc3f7' }}>realm | sdp_ids | peer_hosts</code> — realm is optional (leave empty for peer-only)
+                Format: <code style={{ color: '#4fc3f7' }}>realm | sdp_ids | peer_hosts</code> — realm is optional for peer-only
               </p>
               <textarea
                 value={bulkText}
                 onChange={e => setBulkText(e.target.value)}
                 rows={10}
                 style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 12 }}
-                placeholder={`sdp01.realm.com | sdp01.cs., 10.216.230.37 | peer1.example.com, peer2.example.com\nsdp02.realm.com | sdp02.cs. | peer3.example.com, peer4.example.com\n| | 10.1.1.5, 10.1.1.6`}
+                placeholder={`sdp01.realm.com | sdp01.cs., 10.216.230.37 | peer1.com, peer2.com\nsdp02.realm.com | sdp02.cs. | peer3.com, peer4.com\n| | 10.1.1.5, 10.1.1.6`}
               />
               <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 4 }}>
-                {parseBulkText().length} SDP(s) detected
+                {parseBulkText().length} entry(s) detected
               </p>
             </div>
           )}
@@ -340,9 +396,9 @@ export function SdpPage() {
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <button className="btn btn-secondary" onClick={generateJson} disabled={loading}>
-              Generate JSON
+              {loading ? 'Fetching existing...' : 'Generate JSON (merges with existing)'}
             </button>
-            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading || !generatedJson.trim()}>
+            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading || (!realmsJson.trim() && !peersJson.trim())}>
               {loading ? 'Deploying...' : 'Deploy All'}
             </button>
             <button className="btn btn-danger" onClick={handleDeleteAll} disabled={loading}>
@@ -350,16 +406,28 @@ export function SdpPage() {
             </button>
           </div>
 
-          {/* Generated JSON Preview */}
-          {generatedJson && (
-            <>
-              <label style={{ color: '#90a4ae', fontSize: 12 }}>Generated JSON (editable before deploy):</label>
+          {/* Generated Realms JSON */}
+          {realmsJson && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12 }}>Realms JSON (sent to <code>beamctl external-rating update-realms</code>):</label>
               <textarea
-                value={generatedJson}
-                onChange={e => setGeneratedJson(e.target.value)}
-                style={{ width: '100%', minHeight: 150, maxHeight: 300, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
+                value={realmsJson}
+                onChange={e => setRealmsJson(e.target.value)}
+                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
               />
-            </>
+            </div>
+          )}
+
+          {/* Generated Peers JSON */}
+          {peersJson && (
+            <div>
+              <label style={{ color: '#4fc3f7', fontSize: 12 }}>Peers JSON (sent to <code>beamctl external-rating update-peers</code>):</label>
+              <textarea
+                value={peersJson}
+                onChange={e => setPeersJson(e.target.value)}
+                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
+              />
+            </div>
           )}
         </div>
       )}
@@ -370,8 +438,13 @@ export function SdpPage() {
           <button className="btn btn-secondary" onClick={handleListCurrent} disabled={loading} style={{ marginBottom: 12 }}>
             {loading ? 'Loading...' : 'Refresh'}
           </button>
-          <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 100 }}>
-            {realmsOutput || 'Click Refresh to load current SDP realms'}
+          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Current Realms:</label>
+          <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 60, marginBottom: 12 }}>
+            {realmsOutput || 'Click Refresh'}
+          </div>
+          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Current Peers:</label>
+          <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 60 }}>
+            {peersOutput || 'Click Refresh'}
           </div>
         </div>
       )}
@@ -403,7 +476,7 @@ export function SdpPage() {
               <label style={{ color: '#90a4ae', fontSize: 12 }}>Diameter Sessions:</label>
               <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>
               <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 8 }}>
-                ESTAB = healthy connection. If empty, check routing/firewall between CAF and SDP.
+                ESTAB = healthy. If empty, check routing/firewall between CAF and SDP.
               </p>
             </>
           )}
