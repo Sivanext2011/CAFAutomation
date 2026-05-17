@@ -161,14 +161,19 @@ async def execute_nf_profile_command(
 async def execute_login(username: str, password: str, iam_url: str) -> Job:
     """Execute beamctl login command, auto-accepting certificate trust prompt."""
     cli_path = get_cli_path("beamctl")
-    full_command = [cli_path, "login", "-u", username, "-p", password, "-t", iam_url]
+
+    # Write password to a temp file (beamctl -p expects a file path)
+    pass_file = Path(BIN_DIR) / ".beamctl_pass"
+    pass_file.write_text(password)
+
+    full_command = [cli_path, "login", "-u", username, "-p", str(pass_file), "-t", iam_url]
 
     job_id = str(uuid.uuid4())
     job = Job(
         id=job_id,
-        command=" ".join(full_command),
+        command=" ".join([cli_path, "login", "-u", username, "-p", "***", "-t", iam_url]),
         status=JobStatus.RUNNING,
-        operation="login",
+        operation="login-beamctl",
     )
     save_job(job.model_dump())
 
@@ -186,6 +191,53 @@ async def execute_login(username: str, password: str, iam_url: str) -> Job:
         )
 
         # Send "yes" to auto-accept certificate trust prompt
+        stdout, stderr = await process.communicate(input=b"yes\n")
+
+        job.stdout = stdout.decode("utf-8", errors="replace")
+        job.stderr = stderr.decode("utf-8", errors="replace")
+        job.status = JobStatus.SUCCESS if process.returncode == 0 else JobStatus.FAILED
+        job.completed_at = datetime.utcnow().isoformat()
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.stderr = str(e)
+        job.completed_at = datetime.utcnow().isoformat()
+
+    save_job(job.model_dump())
+    return job
+
+
+async def execute_bamctl_login(username: str, password: str, iam_url: str) -> Job:
+    """Execute bamctl login command, auto-accepting certificate trust prompt."""
+    cli_path = get_cli_path("bamctl")
+
+    # Write password to a temp file (bamctl -p expects a file path)
+    pass_file = Path(BIN_DIR) / ".bamctl_pass"
+    pass_file.write_text(password)
+
+    full_command = [cli_path, "login", "-u", username, "-p", str(pass_file), "-t", iam_url]
+
+    job_id = str(uuid.uuid4())
+    job = Job(
+        id=job_id,
+        command=" ".join([cli_path, "login", "-u", username, "-p", "***", "-t", iam_url]),
+        status=JobStatus.RUNNING,
+        operation="login-bamctl",
+    )
+    save_job(job.model_dump())
+
+    try:
+        env = os.environ.copy()
+        if Path(KUBECONFIG_PATH).exists():
+            env["KUBECONFIG"] = str(Path(KUBECONFIG_PATH).resolve())
+
+        process = await asyncio.create_subprocess_exec(
+            *full_command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+
         stdout, stderr = await process.communicate(input=b"yes\n")
 
         job.stdout = stdout.decode("utf-8", errors="replace")
