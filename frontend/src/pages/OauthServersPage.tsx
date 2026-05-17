@@ -89,9 +89,54 @@ export function OauthServersPage() {
         </div>
       )}
 
-      <div className="console" style={{ marginBottom: 16 }}>
-        {servers?.job?.stdout || 'Run "List OAuth Servers" to see current configuration'}
-      </div>
+      {servers?.job?.stdout ? (
+        <div style={{ marginBottom: 16 }}>
+          {(() => {
+            try {
+              const raw = servers.job.stdout;
+              const parsed = JSON.parse(raw);
+              let serverList: any[] = [];
+              if (Array.isArray(parsed)) serverList = parsed;
+              else if (parsed?.resources) serverList = parsed.resources;
+              else if (parsed?.servers) serverList = parsed.servers;
+              else if (parsed?.address) serverList = [parsed];
+
+              if (serverList.length === 0) return <div className="console">No OAuth servers configured</div>;
+
+              return (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Address</th>
+                      <th>Secured</th>
+                      <th>App Group</th>
+                      <th>Failure Codes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serverList.map((srv: any, i: number) => (
+                      <tr key={i}>
+                        <td>{srv.address || '-'}</td>
+                        <td>{String(srv.secured ?? '-')}</td>
+                        <td>{srv.appGrp || srv.appGroup || '-'}</td>
+                        <td style={{ fontSize: 11 }}>{(srv.failureCodes || []).join(', ') || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            } catch {
+              return (
+                <div className="console" style={{ whiteSpace: 'pre-wrap' }}>
+                  {servers.job.stdout}
+                </div>
+              );
+            }
+          })()}
+        </div>
+      ) : (
+        <div className="console" style={{ marginBottom: 16 }}>Click "Refresh" to list current OAuth servers</div>
+      )}
 
       <button className="btn btn-secondary" onClick={loadServers}>Refresh List</button>
     </div>

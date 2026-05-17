@@ -444,29 +444,40 @@ export function NrfServersPage() {
         <div style={{ marginBottom: 16 }}>
           {(() => {
             try {
-              const parsed = JSON.parse(servers.job.stdout);
-              const serverList = Array.isArray(parsed) ? parsed : parsed?.servers || parsed?.nrfServers || [parsed];
-              if (!Array.isArray(serverList) || serverList.length === 0) throw new Error('empty');
+              const raw = servers.job.stdout;
+              const parsed = JSON.parse(raw);
+              // Handle various response formats
+              let serverList: any[] = [];
+              if (Array.isArray(parsed)) serverList = parsed;
+              else if (parsed?.resources) serverList = parsed.resources;
+              else if (parsed?.servers) serverList = parsed.servers;
+              else if (parsed?.nrfServers) serverList = parsed.nrfServers;
+              else if (parsed?.address) serverList = [parsed];
+
+              if (serverList.length === 0) return <div className="console">No NRF servers configured</div>;
+
               return (
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Server ID</th>
                       <th>Address</th>
                       <th>Secured</th>
+                      <th>Compression</th>
                       <th>App Group</th>
+                      <th>Failure Codes</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {serverList.map((srv: any, i: number) => {
-                      const id = srv.serverId || srv.id || srv.name || `server-${i}`;
+                      const id = srv.serverId || srv.id || srv.name || srv.address || `server-${i}`;
                       return (
-                        <tr key={id}>
-                          <td>{id}</td>
+                        <tr key={i}>
                           <td>{srv.address || '-'}</td>
                           <td>{String(srv.secured ?? '-')}</td>
+                          <td>{String(srv.compression ?? '-')}</td>
                           <td>{srv.appGrp || srv.appGroup || '-'}</td>
+                          <td style={{ fontSize: 11 }}>{(srv.failureCodes || []).join(', ') || '-'}</td>
                           <td>
                             <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDelete(id)}>
                               Delete
