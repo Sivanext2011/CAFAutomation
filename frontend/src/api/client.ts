@@ -254,6 +254,19 @@ export const renewCertKey = (name: string, data: any) =>
 export const dataCollectorCollect = (profile: string) =>
   request<any>('/data-collector/collect', { method: 'POST', body: JSON.stringify({ profile }) });
 
+// Extended Data Collection (XDC)
+export const xdcGetTargets = () => request<any>('/xdc/targets');
+export const xdcListCollections = () => request<any>('/xdc/collections');
+export const xdcGetCollection = (id: string) => request<any>(`/xdc/collections/${id}`);
+export const xdcDeleteCollection = (id: string) => request<any>(`/xdc/collections/${id}`, { method: 'DELETE' });
+export const xdcCollectImmediate = (target: string, extra?: string) =>
+  request<any>('/xdc/collect-immediate', { method: 'POST', body: JSON.stringify({ target, extra }) });
+export const xdcNewCollection = (target: string, extra?: string) =>
+  request<any>('/xdc/new-collection', { method: 'POST', body: JSON.stringify({ target, extra }) });
+export const xdcGetFile = (id: string) =>
+  request<any>(`/xdc/get-file/${id}`, { method: 'POST' });
+export const xdcConfigView = () => request<any>('/xdc/config');
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
