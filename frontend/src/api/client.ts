@@ -179,6 +179,20 @@ export const edmStaleRemove = (data: any) =>
 export const edmStalePublish = (data: any) =>
   request<any>('/mediation/stale/publish', { method: 'POST', body: JSON.stringify(data) });
 
+// Access Management
+export const resetPassword = (data: any) =>
+  request<any>('/access-mgmt/reset-password', { method: 'POST', body: JSON.stringify(data) });
+export const getLegalWarning = () => request<any>('/access-mgmt/legal-warning');
+export const updateLegalWarning = (data: any) =>
+  request<any>('/access-mgmt/legal-warning', { method: 'POST', body: JSON.stringify(data) });
+export const getPrivacyNotice = () => request<any>('/access-mgmt/privacy-notice');
+export const updatePrivacyNotice = (data: any) =>
+  request<any>('/access-mgmt/privacy-notice', { method: 'POST', body: JSON.stringify(data) });
+export const exportRealm = (data: any) =>
+  request<any>('/access-mgmt/export-realm', { method: 'POST', body: JSON.stringify(data) });
+export const importRealm = (data: any) =>
+  request<any>('/access-mgmt/import-realm', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
