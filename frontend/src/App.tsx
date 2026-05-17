@@ -9,6 +9,7 @@ import { MediationPage } from './pages/MediationPage';
 import { AccessMgmtPage } from './pages/AccessMgmtPage';
 import { AlarmsPage } from './pages/AlarmsPage';
 import { BackupPage } from './pages/BackupPage';
+import { CertMgmtPage } from './pages/CertMgmtPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -31,6 +32,7 @@ function App() {
             <li><NavLink to="/access-mgmt">Access Mgmt</NavLink></li>
             <li><NavLink to="/alarms">Alarms</NavLink></li>
             <li><NavLink to="/backup">Backup</NavLink></li>
+            <li><NavLink to="/certs">Certificates</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -47,6 +49,7 @@ function App() {
             <Route path="/access-mgmt" element={<AccessMgmtPage />} />
             <Route path="/alarms" element={<AlarmsPage />} />
             <Route path="/backup" element={<BackupPage />} />
+            <Route path="/certs" element={<CertMgmtPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

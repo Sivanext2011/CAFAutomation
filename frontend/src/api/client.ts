@@ -231,6 +231,25 @@ export const backupCreatePeriodic = (brmId: string, data: any) =>
 export const backupCreateCalendar = (brmId: string, data: any) =>
   request<any>(`/backup/managers/${brmId}/calendar-schedule`, { method: 'POST', body: JSON.stringify(data) });
 
+// Certificate Management
+export const getCertMappings = () => request<any>('/cert-mgmt/mappings');
+export const saveCertMappings = (data: any) =>
+  request<any>('/cert-mgmt/mappings', { method: 'POST', body: JSON.stringify(data) });
+export const installCertKey = (data: any) =>
+  request<any>('/cert-mgmt/install-key', { method: 'POST', body: JSON.stringify(data) });
+export const trustCertCa = (data: any) =>
+  request<any>('/cert-mgmt/trust-ca', { method: 'POST', body: JSON.stringify(data) });
+export const listCertKeys = () => request<any>('/cert-mgmt/keys');
+export const getCertKey = (name: string) => request<any>(`/cert-mgmt/keys/${name}`);
+export const deleteCertKey = (name: string) => request<any>(`/cert-mgmt/keys/${name}`, { method: 'DELETE' });
+export const listCertTrusted = () => request<any>('/cert-mgmt/trusted');
+export const getCertTrusted = (name: string) => request<any>(`/cert-mgmt/trusted/${name}`);
+export const deleteCertTrusted = (name: string) => request<any>(`/cert-mgmt/trusted/${name}`, { method: 'DELETE' });
+export const listCertCmp = () => request<any>('/cert-mgmt/cmp-groups');
+export const listCertCrls = () => request<any>('/cert-mgmt/crls');
+export const renewCertKey = (name: string, data: any) =>
+  request<any>(`/cert-mgmt/renew/${name}`, { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
