@@ -15,7 +15,7 @@ export function SetupPage() {
   const [iamFqdn, setIamFqdn] = useState('');
   const [certmFqdn, setCertmFqdn] = useState('');
   const [namespace, setNamespace] = useState('caf');
-  const [kubeconfigPath, setKubeconfigPath] = useState('');
+  const [kubeconfigContent, setKubeconfigContent] = useState('');
 
   // Step 2: Login
   const [username, setUsername] = useState('');
@@ -45,9 +45,9 @@ export function SetupPage() {
         iam_fqdn: iamFqdn || undefined,
         certm_fqdn: certmFqdn || undefined,
         namespace: namespace || undefined,
-        kubeconfig_path: kubeconfigPath || undefined,
+        kubeconfig_content: kubeconfigContent || undefined,
       });
-      setSuccess('Setup completed. beamctl downloaded and FQDN configured.');
+      setSuccess('Setup completed. CLIs downloaded to bin/ and configured.');
       setStep(2);
       loadStatus();
     } catch (e: any) {
@@ -66,7 +66,7 @@ export function SetupPage() {
         iam_url: iamUrl || undefined,
       });
       if (result.status === 'success') {
-        setSuccess('Login successful. You can now use NRF operations.');
+        setSuccess('Login successful. Credentials saved to bin/login.json.');
         setStep(3);
       } else {
         setError('Login failed: ' + (result.job?.stderr || 'Unknown error'));
@@ -82,7 +82,7 @@ export function SetupPage() {
     try {
       const result = await redownloadBeamctl();
       if (result.status === 'success') {
-        setSuccess('beamctl binary re-downloaded successfully');
+        setSuccess('beamctl binary re-downloaded to bin/');
       } else {
         setError('Download failed: ' + (result.job?.stderr || ''));
       }
@@ -111,7 +111,7 @@ export function SetupPage() {
         <div className="form-panel" style={{ maxWidth: 600 }}>
           <h3 style={{ marginBottom: 4, color: '#4fc3f7' }}>Step 1: Initial Configuration</h3>
           <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 16 }}>
-            Configure cluster FQDNs and download CLI binaries.
+            Configure cluster FQDNs and download CLI binaries to ./bin/ directory.
           </p>
           <form onSubmit={handleSetup}>
             <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
@@ -128,9 +128,9 @@ export function SetupPage() {
             </div>
 
             <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>CLI Binary Download</label>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>CLI Binary Download (saved to ./bin/)</label>
               <p style={{ color: '#90a4ae', fontSize: 11, marginBottom: 8 }}>
-                beamctl and bamctl will be downloaded from the cluster. Leave FQDNs empty to use defaults.
+                beamctl and bamctl will be downloaded to the bin/ directory. Leave FQDNs empty to use defaults.
               </p>
               <div className="form-group" style={{ marginTop: 8 }}>
                 <label>BEAM CLI FQDN (default: eric-bss-beam-cli.&lt;oamDomain&gt;)</label>
@@ -161,11 +161,13 @@ export function SetupPage() {
                 />
               </div>
               <div className="form-group">
-                <label>Kubeconfig Path (leave empty for in-cluster)</label>
-                <input
-                  value={kubeconfigPath}
-                  onChange={e => setKubeconfigPath(e.target.value)}
-                  placeholder="/root/.kube/config"
+                <label>Kubeconfig Content (paste your kubeconfig file here, saved to bin/kubeconfig)</label>
+                <textarea
+                  value={kubeconfigContent}
+                  onChange={e => setKubeconfigContent(e.target.value)}
+                  placeholder="apiVersion: v1&#10;clusters:&#10;- cluster:&#10;    server: https://..."
+                  rows={8}
+                  style={{ fontFamily: 'monospace', fontSize: 11 }}
                 />
               </div>
             </div>
@@ -204,7 +206,7 @@ export function SetupPage() {
         <div className="form-panel" style={{ maxWidth: 500 }}>
           <h3 style={{ marginBottom: 4, color: '#4fc3f7' }}>Step 2: Login to beamctl</h3>
           <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 16 }}>
-            Authenticate with IAM (KeyCloak) to get JWT token for CLI operations.
+            Authenticate with IAM (KeyCloak). Credentials saved to bin/login.json.
           </p>
           <form onSubmit={handleLogin}>
             <div className="form-group">
@@ -246,7 +248,8 @@ export function SetupPage() {
                 <tr><td>IAM FQDN</td><td>{status?.iam_fqdn}</td></tr>
                 <tr><td>CertM FQDN</td><td>{status?.certm_fqdn}</td></tr>
                 <tr><td>Namespace</td><td>{status?.namespace || 'caf'}</td></tr>
-                <tr><td>Kubeconfig</td><td>{status?.kubeconfig_path || 'In-cluster'}</td></tr>
+                <tr><td>Bin Directory</td><td>./bin/ (beamctl, bamctl, kubeconfig, login.json)</td></tr>
+                <tr><td>Logged in as</td><td>{status?.logged_in_user || 'N/A'}</td></tr>
               </tbody>
             </table>
           </div>

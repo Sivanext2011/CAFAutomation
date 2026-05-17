@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import uuid
 import tempfile
 from datetime import datetime
@@ -9,8 +10,13 @@ from typing import Optional, Callable
 from backend.models.schemas import Job, JobStatus
 from backend.storage import save_job, get_state, set_state
 
-BEAMCTL_PATH = "/usr/local/bin/beamctl"
-BAMCTL_PATH = "/usr/local/bin/bamctl"
+BIN_DIR = Path(".") / "bin"
+BIN_DIR.mkdir(parents=True, exist_ok=True)
+
+BEAMCTL_PATH = str(BIN_DIR / "beamctl")
+BAMCTL_PATH = str(BIN_DIR / "bamctl")
+KUBECONFIG_PATH = str(BIN_DIR / "kubeconfig")
+LOGIN_FILE = str(BIN_DIR / "login.json")
 
 
 def get_cli_path(cli: str = "beamctl") -> str:
@@ -58,11 +64,16 @@ async def execute_command(
             # Use shell redirection via stdin
             stdin_data = json.dumps(stdin_json).encode()
 
+        env = os.environ.copy()
+        if Path(KUBECONFIG_PATH).exists():
+            env["KUBECONFIG"] = str(Path(KUBECONFIG_PATH).resolve())
+
         process = await asyncio.create_subprocess_exec(
             *full_command,
             stdin=asyncio.subprocess.PIPE if stdin_data else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
 
         stdout_lines = []
@@ -172,7 +183,7 @@ async def execute_config_set(key: str, value: str) -> Job:
 
 async def download_beamctl(fqdn: str, target_path: str = BEAMCTL_PATH) -> Job:
     """Download beamctl binary from the BEAM CLI server."""
-    command_args = ["curl", "-kO", f"https://{fqdn}/images/linux/beamctl", "-o", target_path]
+    command_args = ["curl", "-k", f"https://{fqdn}/images/linux/beamctl", "-o", target_path]
     job_id = str(uuid.uuid4())
     job = Job(
         id=job_id,
@@ -212,3 +223,65 @@ async def download_beamctl(fqdn: str, target_path: str = BEAMCTL_PATH) -> Job:
 
     save_job(job.model_dump())
     return job
+
+
+async def download_bamctl(fqdn: str, target_path: str = BAMCTL_PATH) -> Job:
+    """Download bamctl binary from the BAM CLI server."""
+    command_args = ["curl", "-k", f"https://{fqdn}/images/linux/bamctl", "-o", target_path]
+    job_id = str(uuid.uuid4())
+    job = Job(
+        id=job_id,
+        command=" ".join(command_args),
+        status=JobStatus.RUNNING,
+        operation="download-bamctl",
+    )
+    save_job(job.model_dump())
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        job.stdout = stdout.decode("utf-8", errors="replace")
+        job.stderr = stderr.decode("utf-8", errors="replace")
+
+        if process.returncode == 0:
+            chmod_proc = await asyncio.create_subprocess_exec(
+                "chmod", "750", target_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await chmod_proc.wait()
+            job.status = JobStatus.SUCCESS
+        else:
+            job.status = JobStatus.FAILED
+
+        job.completed_at = datetime.utcnow().isoformat()
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.stderr = str(e)
+        job.completed_at = datetime.utcnow().isoformat()
+
+    save_job(job.model_dump())
+    return job
+
+
+def save_kubeconfig(content: str):
+    """Save kubeconfig content to bin/kubeconfig."""
+    Path(KUBECONFIG_PATH).write_text(content)
+
+
+def save_login_details(username: str, iam_url: str):
+    """Save login details to bin/login.json."""
+    data = {"username": username, "iam_url": iam_url}
+    Path(LOGIN_FILE).write_text(json.dumps(data, indent=2))
+
+
+def get_login_details() -> Optional[dict]:
+    """Read login details from bin/login.json."""
+    p = Path(LOGIN_FILE)
+    if p.exists():
+        return json.loads(p.read_text())
+    return None

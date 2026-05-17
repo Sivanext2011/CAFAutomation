@@ -41,10 +41,11 @@ class SecurityProfile(BaseModel):
 class SetupConfig(BaseModel):
     oam_site_domain_name: str
     beam_cli_fqdn: Optional[str] = None
+    bam_cli_fqdn: Optional[str] = None
     iam_fqdn: Optional[str] = None
     certm_fqdn: Optional[str] = None
     namespace: Optional[str] = None
-    kubeconfig_path: Optional[str] = None
+    kubeconfig_content: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
