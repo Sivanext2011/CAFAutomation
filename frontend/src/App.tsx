@@ -10,6 +10,7 @@ import { AccessMgmtPage } from './pages/AccessMgmtPage';
 import { AlarmsPage } from './pages/AlarmsPage';
 import { BackupPage } from './pages/BackupPage';
 import { CertMgmtPage } from './pages/CertMgmtPage';
+import { DataCollectorPage } from './pages/DataCollectorPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -33,6 +34,7 @@ function App() {
             <li><NavLink to="/alarms">Alarms</NavLink></li>
             <li><NavLink to="/backup">Backup</NavLink></li>
             <li><NavLink to="/certs">Certificates</NavLink></li>
+            <li><NavLink to="/data-collect">Data Collection</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -50,6 +52,7 @@ function App() {
             <Route path="/alarms" element={<AlarmsPage />} />
             <Route path="/backup" element={<BackupPage />} />
             <Route path="/certs" element={<CertMgmtPage />} />
+            <Route path="/data-collect" element={<DataCollectorPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

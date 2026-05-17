@@ -15,6 +15,7 @@ from backend.api.access_mgmt_routes import router as access_mgmt_router
 from backend.api.alarm_routes import router as alarm_router
 from backend.api.backup_routes import router as backup_router
 from backend.api.cert_mgmt_routes import router as cert_mgmt_router
+from backend.api.data_collector_routes import router as data_collector_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -44,6 +45,7 @@ app.include_router(access_mgmt_router)
 app.include_router(alarm_router)
 app.include_router(backup_router)
 app.include_router(cert_mgmt_router)
+app.include_router(data_collector_router)
 app.include_router(ws_router)
 
 

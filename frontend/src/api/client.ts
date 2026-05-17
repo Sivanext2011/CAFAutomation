@@ -250,6 +250,10 @@ export const listCertCrls = () => request<any>('/cert-mgmt/crls');
 export const renewCertKey = (name: string, data: any) =>
   request<any>(`/cert-mgmt/renew/${name}`, { method: 'POST', body: JSON.stringify(data) });
 
+// Data Collector
+export const dataCollectorCollect = (profile: string) =>
+  request<any>('/data-collector/collect', { method: 'POST', body: JSON.stringify({ profile }) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
