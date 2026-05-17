@@ -95,11 +95,13 @@ export function OauthServersPage() {
             try {
               const raw = servers.job.stdout;
               const parsed = JSON.parse(raw);
+              // Format: { "1": { address, ... }, "2": { ... } }
               let serverList: any[] = [];
               if (Array.isArray(parsed)) serverList = parsed;
               else if (parsed?.resources) serverList = parsed.resources;
-              else if (parsed?.servers) serverList = parsed.servers;
-              else if (parsed?.address) serverList = [parsed];
+              else if (typeof parsed === 'object') {
+                serverList = Object.entries(parsed).map(([key, val]: [string, any]) => ({ _id: key, ...val }));
+              }
 
               if (serverList.length === 0) return <div className="console">No OAuth servers configured</div>;
 
@@ -107,6 +109,7 @@ export function OauthServersPage() {
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th>ID</th>
                       <th>Address</th>
                       <th>Secured</th>
                       <th>App Group</th>
@@ -116,9 +119,10 @@ export function OauthServersPage() {
                   <tbody>
                     {serverList.map((srv: any, i: number) => (
                       <tr key={i}>
+                        <td>{srv._id || i + 1}</td>
                         <td>{srv.address || '-'}</td>
                         <td>{String(srv.secured ?? '-')}</td>
-                        <td>{srv.appGrp || srv.appGroup || '-'}</td>
+                        <td>{srv.appGrp || '-'}</td>
                         <td style={{ fontSize: 11 }}>{(srv.failureCodes || []).join(', ') || '-'}</td>
                       </tr>
                     ))}

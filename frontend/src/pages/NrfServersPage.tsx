@@ -446,13 +446,13 @@ export function NrfServersPage() {
             try {
               const raw = servers.job.stdout;
               const parsed = JSON.parse(raw);
-              // Handle various response formats
+              // Format: { "1": { address, ... }, "2": { ... } }
               let serverList: any[] = [];
               if (Array.isArray(parsed)) serverList = parsed;
               else if (parsed?.resources) serverList = parsed.resources;
-              else if (parsed?.servers) serverList = parsed.servers;
-              else if (parsed?.nrfServers) serverList = parsed.nrfServers;
-              else if (parsed?.address) serverList = [parsed];
+              else if (typeof parsed === 'object') {
+                serverList = Object.entries(parsed).map(([key, val]: [string, any]) => ({ _id: key, ...val }));
+              }
 
               if (serverList.length === 0) return <div className="console">No NRF servers configured</div>;
 
@@ -460,6 +460,7 @@ export function NrfServersPage() {
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th>ID</th>
                       <th>Address</th>
                       <th>Secured</th>
                       <th>Compression</th>
@@ -469,23 +470,21 @@ export function NrfServersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {serverList.map((srv: any, i: number) => {
-                      const id = srv.serverId || srv.id || srv.name || srv.address || `server-${i}`;
-                      return (
-                        <tr key={i}>
-                          <td>{srv.address || '-'}</td>
-                          <td>{String(srv.secured ?? '-')}</td>
-                          <td>{String(srv.compression ?? '-')}</td>
-                          <td>{srv.appGrp || srv.appGroup || '-'}</td>
-                          <td style={{ fontSize: 11 }}>{(srv.failureCodes || []).join(', ') || '-'}</td>
-                          <td>
-                            <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDelete(id)}>
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {serverList.map((srv: any, i: number) => (
+                      <tr key={i}>
+                        <td>{srv._id || i + 1}</td>
+                        <td>{srv.address || '-'}</td>
+                        <td>{String(srv.secured ?? '-')}</td>
+                        <td>{String(srv.compression ?? '-')}</td>
+                        <td>{srv.appGrp || '-'}</td>
+                        <td style={{ fontSize: 11 }}>{(srv.failureCodes || []).join(', ') || '-'}</td>
+                        <td>
+                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDelete(srv._id || String(i + 1))}>
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               );
