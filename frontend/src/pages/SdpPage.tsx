@@ -33,6 +33,9 @@ export function SdpPage() {
   // Current config
   const [realmsOutput, setRealmsOutput] = useState('');
   const [peersOutput, setPeersOutput] = useState('');
+  const [currentRealms, setCurrentRealms] = useState<any[]>([]);
+  const [currentPeers, setCurrentPeers] = useState<any[]>([]);
+  const [configModified, setConfigModified] = useState(false);
 
   // Status
   const [statusOutput, setStatusOutput] = useState('');
@@ -214,11 +217,41 @@ export function SdpPage() {
 
   async function handleListCurrent() {
     setLoading(true);
+    setConfigModified(false);
     try {
       const rResult = await listSdpRealms();
-      setRealmsOutput(rResult.job?.stdout || 'No realms configured');
+      const rOut = rResult.job?.stdout || '';
+      setRealmsOutput(rOut);
+      try { setCurrentRealms(JSON.parse(rOut)); } catch { setCurrentRealms([]); }
+
       const pResult = await listSdpPeers();
-      setPeersOutput(pResult.job?.stdout || 'No peers configured');
+      const pOut = pResult.job?.stdout || '';
+      setPeersOutput(pOut);
+      try { setCurrentPeers(JSON.parse(pOut)); } catch { setCurrentPeers([]); }
+    } catch (e: any) {
+      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
+    }
+    setLoading(false);
+  }
+
+  function removeCurrentRealm(i: number) {
+    setCurrentRealms(currentRealms.filter((_, idx) => idx !== i));
+    setConfigModified(true);
+  }
+
+  function removeCurrentPeer(i: number) {
+    setCurrentPeers(currentPeers.filter((_, idx) => idx !== i));
+    setConfigModified(true);
+  }
+
+  async function handleDeployCurrent() {
+    if (!confirm('Deploy modified realms and peers? This replaces the entire config.')) return;
+    setLoading(true);
+    try {
+      await updateSdpRealms(currentRealms);
+      await updateSdpPeers(currentPeers);
+      setConfigModified(false);
+      setPopup({ type: 'success', message: `Deployed ${currentRealms.length} realm(s) and ${currentPeers.length} peer(s)` });
     } catch (e: any) {
       setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
     }
@@ -435,17 +468,66 @@ export function SdpPage() {
       {/* Current Config Tab */}
       {tab === 'current' && (
         <div>
-          <button className="btn btn-secondary" onClick={handleListCurrent} disabled={loading} style={{ marginBottom: 12 }}>
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Current Realms:</label>
-          <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 60, marginBottom: 12 }}>
-            {realmsOutput || 'Click Refresh'}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-secondary" onClick={handleListCurrent} disabled={loading}>
+              {loading ? 'Loading...' : 'Refresh'}
+            </button>
+            {configModified && (
+              <button className="btn btn-primary" onClick={handleDeployCurrent} disabled={loading}>
+                Deploy Changes
+              </button>
+            )}
           </div>
-          <label style={{ color: '#4fc3f7', fontSize: 12 }}>Current Peers:</label>
-          <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 60 }}>
-            {peersOutput || 'Click Refresh'}
-          </div>
+          {configModified && (
+            <div className="alert alert-error" style={{ marginBottom: 12 }}>
+              ⚠ Config modified. Click "Deploy Changes" to apply removals.
+            </div>
+          )}
+
+          <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Realms ({currentRealms.length})</label>
+          {currentRealms.length > 0 ? (
+            <table className="data-table" style={{ marginTop: 4, marginBottom: 16 }}>
+              <thead><tr><th>Realm</th><th>App Group</th><th>SDP IDs</th><th>Strategy</th><th>Addresses</th><th></th></tr></thead>
+              <tbody>
+                {currentRealms.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.realm}</td>
+                    <td>{r.appGrp}</td>
+                    <td style={{ fontSize: 11 }}>{(r.sdp_id || []).join(', ')}</td>
+                    <td>{r.strategy}</td>
+                    <td style={{ fontSize: 11 }}>{(r.addresses || []).flatMap((a: any) => a.peerAddresses || []).join(', ')}</td>
+                    <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentRealm(i)}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 40, marginBottom: 12 }}>
+              {realmsOutput || 'Click Refresh'}
+            </div>
+          )}
+
+          <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Peers ({currentPeers.length})</label>
+          {currentPeers.length > 0 ? (
+            <table className="data-table" style={{ marginTop: 4 }}>
+              <thead><tr><th>Peer URI</th><th>App Group</th><th>Initiate</th><th>Alarm</th><th></th></tr></thead>
+              <tbody>
+                {currentPeers.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 11 }}>{p.peer}</td>
+                    <td>{p.appGrp}</td>
+                    <td>{p.initiateConnection ? 'Yes' : 'No'}</td>
+                    <td>{p.raiseAlarm ? 'Yes' : 'No'}</td>
+                    <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentPeer(i)}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 40 }}>
+              {peersOutput || 'Click Refresh'}
+            </div>
+          )}
         </div>
       )}
 
