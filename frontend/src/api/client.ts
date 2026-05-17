@@ -193,6 +193,14 @@ export const exportRealm = (data: any) =>
 export const importRealm = (data: any) =>
   request<any>('/access-mgmt/import-realm', { method: 'POST', body: JSON.stringify(data) });
 
+// Alarms
+export const listAllAlarms = (outputformat?: string) =>
+  request<any>(`/alarms/list${outputformat ? `?outputformat=${outputformat}` : ''}`);
+export const getAlarm = (data: any) =>
+  request<any>('/alarms/get', { method: 'POST', body: JSON.stringify(data) });
+export const clearAlarm = (data: any) =>
+  request<any>('/alarms/clear', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
