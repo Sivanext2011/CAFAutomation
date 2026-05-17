@@ -17,6 +17,8 @@ export function SubAcctLocPage() {
   // Current list
   const [configsOutput, setConfigsOutput] = useState('');
   const [partitionsOutput, setPartitionsOutput] = useState('');
+  const [mappings, setMappings] = useState<any[]>([]);
+  const [partitions, setPartitions] = useState<string[]>([]);
 
   // Single entry form
   const [name, setName] = useState('');
@@ -37,7 +39,12 @@ export function SubAcctLocPage() {
     setLoading(true);
     try {
       const result = await listAllSubAcctLoc();
-      setConfigsOutput(result.job?.stdout || 'No configurations');
+      const stdout = result.job?.stdout || '';
+      setConfigsOutput(stdout);
+      try {
+        const parsed = JSON.parse(stdout);
+        setMappings(parsed.resources || []);
+      } catch { setMappings([]); }
     } catch (e: any) { showError(e); }
     setLoading(false);
   }
@@ -46,7 +53,13 @@ export function SubAcctLocPage() {
     setLoading(true);
     try {
       const result = await listPartitions();
-      setPartitionsOutput(result.job?.stdout || 'No partitions');
+      const stdout = result.job?.stdout || '';
+      setPartitionsOutput(stdout);
+      try {
+        const parsed = JSON.parse(stdout);
+        const parts = parsed.resources?.[0]?.activePartitions || [];
+        setPartitions(parts);
+      } catch { setPartitions([]); }
     } catch (e: any) { showError(e); }
     setLoading(false);
   }
@@ -182,16 +195,42 @@ export function SubAcctLocPage() {
             </button>
           </div>
 
-          {partitionsOutput && (
-            <div className="console" style={{ whiteSpace: 'pre-wrap', marginBottom: 8, maxHeight: 80, overflow: 'auto' }}>
-              {partitionsOutput}
+          {partitions.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Active Partitions</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>Partition ID</th></tr></thead>
+                <tbody>
+                  {partitions.map((p, i) => <tr key={i}><td>{p}</td></tr>)}
+                </tbody>
+              </table>
             </div>
           )}
+          {!partitions.length && partitionsOutput && (
+            <div className="console" style={{ whiteSpace: 'pre-wrap', marginBottom: 8, maxHeight: 80, overflow: 'auto' }}>{partitionsOutput}</div>
+          )}
 
-          {configsOutput && (
-            <div className="console" style={{ whiteSpace: 'pre-wrap', marginBottom: 16, maxHeight: 200, overflow: 'auto' }}>
-              {configsOutput}
+          {mappings.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Mappings ({mappings.length})</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>SDP Name</th><th>IP Address</th><th>Partition ID</th><th>Last Updated</th><th></th></tr></thead>
+                <tbody>
+                  {mappings.map((m, i) => (
+                    <tr key={i}>
+                      <td>{m.name}</td>
+                      <td>{m.ip}</td>
+                      <td>{m.partitionId}</td>
+                      <td style={{ fontSize: 11 }}>{m.lastUpdatedDateTime || '-'}</td>
+                      <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => handleDelete(m.name)}>✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          )}
+          {!mappings.length && configsOutput && (
+            <div className="console" style={{ whiteSpace: 'pre-wrap', marginBottom: 16, maxHeight: 200, overflow: 'auto' }}>{configsOutput}</div>
           )}
 
           {/* Add/Edit/Delete Form */}
