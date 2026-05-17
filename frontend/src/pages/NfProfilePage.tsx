@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listNfProfileConfig, deleteNfProfileConfig } from '../api/client';
+import { listNfProfileConfig } from '../api/client';
 
 export function NfProfilePage() {
   const [profiles, setProfiles] = useState<any>(null);
@@ -12,18 +12,6 @@ export function NfProfilePage() {
     try {
       const result = await listNfProfileConfig();
       setProfiles(result);
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
-  async function handleDelete(appGroup: string) {
-    if (!confirm(`Delete NF Profile Config for ${appGroup}?`)) return;
-    setError(''); setSuccess('');
-    try {
-      await deleteNfProfileConfig(appGroup);
-      setSuccess(`NF Profile Config for ${appGroup} deleted`);
-      loadProfiles();
     } catch (e: any) {
       setError(e.message);
     }
@@ -42,7 +30,9 @@ export function NfProfilePage() {
         {profiles?.job?.stdout || 'Loading NF Profile configuration...'}
       </div>
 
-      <button className="btn btn-secondary" onClick={loadProfiles}>Refresh</button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-secondary" onClick={loadProfiles}>Refresh</button>
+      </div>
     </div>
   );
 }

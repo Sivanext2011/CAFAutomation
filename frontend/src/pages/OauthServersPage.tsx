@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listNrfOauthServers, addNrfOauthServer, deleteNrfOauthServer } from '../api/client';
+import { listNrfOauthServers, addNrfOauthServer } from '../api/client';
 
 export function OauthServersPage() {
   const [servers, setServers] = useState<any>(null);
@@ -45,17 +45,6 @@ export function OauthServersPage() {
     setLoading(false);
   }
 
-  async function handleDelete(serverId: string) {
-    if (!confirm(`Delete NRF OAuth Server ${serverId}?`)) return;
-    setError('');
-    try {
-      await deleteNrfOauthServer(serverId);
-      setSuccess(`OAuth Server ${serverId} deleted`);
-      loadServers();
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
 
   return (
     <div>

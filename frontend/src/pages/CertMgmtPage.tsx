@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCertMappings, saveCertMappings, installCertKey, trustCertCa, listCertKeys, listCertTrusted, listCertCmp, listCertCrls, deleteCertKey, deleteCertTrusted, generateSelfSignedCert, generateCsr } from '../api/client';
+import { getCertMappings, saveCertMappings, installCertKey, trustCertCa, listCertKeys, listCertTrusted, listCertCmp, listCertCrls, generateSelfSignedCert, generateCsr } from '../api/client';
 
 interface ServiceMapping {
   serviceName: string;

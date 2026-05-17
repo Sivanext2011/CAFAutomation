@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getDiameterProxies, getDiameterPeers, diameterBulkAdd, removeDiameterProxy, removeDiameterPeer,
+  getDiameterProxies, getDiameterPeers, diameterBulkAdd,
   setRestrictPeerList, setSendReplyUnknown, getDiameterAllConfig, getDiameterGlobalConfig,
   getDiameterAppgroups, getDiameterAppgroup, deleteDiameterAppgroup,
   addOwnDiameterIdentity, getOwnDiameterIdentities,
-  listSdpRealms, updateSdpRealms, listSdpPeers, updateSdpPeers, checkSdpPeerStatus,
 } from '../api/client';
 
 interface DiameterEntry { interface: string; host: string; realm: string; }
