@@ -30,7 +30,56 @@ def get_cli_path(cli: str = "beamctl") -> str:
     return BEAMCTL_PATH
 
 
+TOKEN_EXPIRED_MARKERS = [
+    "token expired",
+    "login expired",
+    "unable to get authentication token",
+]
+
+
+def _is_token_expired(output: str) -> bool:
+    lower = output.lower()
+    return any(m in lower for m in TOKEN_EXPIRED_MARKERS)
+
+
+async def _re_login(cli: str = "beamctl"):
+    """Re-login using saved credentials."""
+    login_info = get_login_details()
+    if not login_info:
+        return
+    username = login_info.get("username", "")
+    iam_url = login_info.get("iam_url", "")
+    # Read password from saved file
+    pass_file = Path(BIN_DIR) / f".{cli}_pass"
+    if not pass_file.exists() or not username or not iam_url:
+        return
+    password = pass_file.read_text().strip()
+    if cli == "bamctl":
+        await execute_bamctl_login(username, password, iam_url)
+    else:
+        await execute_login(username, password, iam_url)
+
+
 async def execute_command(
+    command_args: list[str],
+    operation: str,
+    input_payload: Optional[dict] = None,
+    stdin_json: Optional[dict] = None,
+    on_output: Optional[Callable[[str], None]] = None,
+    cli: str = "beamctl",
+) -> Job:
+    job = await _execute_command_once(command_args, operation, input_payload, stdin_json, on_output, cli)
+
+    # If token expired, re-login and retry once
+    combined = (job.stdout or "") + (job.stderr or "")
+    if job.status == JobStatus.FAILED and _is_token_expired(combined):
+        await _re_login(cli)
+        job = await _execute_command_once(command_args, operation, input_payload, stdin_json, on_output, cli)
+
+    return job
+
+
+async def _execute_command_once(
     command_args: list[str],
     operation: str,
     input_payload: Optional[dict] = None,
