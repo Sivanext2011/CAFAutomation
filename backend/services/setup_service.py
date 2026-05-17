@@ -124,6 +124,26 @@ async def redownload_beamctl() -> Job:
     return await download_beamctl(beam_fqdn)
 
 
+async def redownload_bamctl() -> Job:
+    """Re-download bamctl binary (for upgrades)."""
+    setup = get_setup_config()
+    if not setup:
+        raise RuntimeError("Setup not complete. Run initial setup first.")
+
+    bam_fqdn = setup.get("bam_cli_fqdn", "")
+    return await download_bamctl(bam_fqdn)
+
+
+async def redownload_all_clis() -> dict:
+    """Re-download both beamctl and bamctl."""
+    beam_job = await redownload_beamctl()
+    bam_job = await redownload_bamctl()
+    return {
+        "beamctl": beam_job.model_dump(),
+        "bamctl": bam_job.model_dump(),
+    }
+
+
 def get_setup_status() -> dict:
     config = get_setup_config()
     if not config:

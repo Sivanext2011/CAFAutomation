@@ -20,6 +20,8 @@ export const login = (data: any) =>
   request<any>('/setup/login', { method: 'POST', body: JSON.stringify(data) });
 export const redownloadBeamctl = () =>
   request<any>('/setup/redownload-beamctl', { method: 'POST' });
+export const redownloadAllClis = () =>
+  request<any>('/setup/redownload-all', { method: 'POST' });
 
 // Combined NRF Deployment
 export const deployNrfConfiguration = (data: any) =>

@@ -4,6 +4,7 @@ from backend.services.setup_service import (
     perform_initial_setup,
     perform_login,
     redownload_beamctl,
+    redownload_all_clis,
     get_setup_status,
 )
 
@@ -38,5 +39,14 @@ async def redownload():
     try:
         job = await redownload_beamctl()
         return {"status": job.status, "job": job.model_dump()}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/redownload-all")
+async def redownload_all():
+    try:
+        result = await redownload_all_clis()
+        return {"status": "success", "result": result}
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

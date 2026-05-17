@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSetupStatus, initializeSetup, login, redownloadBeamctl } from '../api/client';
+import { getSetupStatus, initializeSetup, login, redownloadAllClis } from '../api/client';
 
 export function SetupPage() {
   const [status, setStatus] = useState<any>(null);
@@ -84,11 +84,11 @@ export function SetupPage() {
   async function handleRedownload() {
     setError(''); setSuccess(''); setLoading(true);
     try {
-      const result = await redownloadBeamctl();
+      const result = await redownloadAllClis();
       if (result.status === 'success') {
-        setSuccess('beamctl binary re-downloaded to bin/');
+        setSuccess('beamctl + bamctl re-downloaded to bin/');
       } else {
-        setError('Download failed: ' + (result.job?.stderr || ''));
+        setError('Download failed');
       }
     } catch (e: any) {
       setError(e.message);
