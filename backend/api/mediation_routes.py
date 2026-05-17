@@ -84,6 +84,20 @@ async def dest_delete(partition: str, file_type: str = None):
     return await _run(args, "edm-dest-delete", {"partition": partition, "fileType": file_type})
 
 
+@router.post("/destination/retransmit-key")
+async def dest_retransmit_key(request: Request):
+    d = await request.json()
+    args = ["pub-dest-config-v2", "retransmit-key", d["customerPartition"], d["sftpDestinationType"]]
+    return await _run(args, "edm-dest-retransmit-key", d)
+
+
+@router.post("/destination/retransmit-keys")
+async def dest_retransmit_keys(request: Request):
+    d = await request.json()
+    args = ["pub-dest-config-v2", "retransmit-keys", d["customerPartition"]]
+    return await _run(args, "edm-dest-retransmit-keys", d)
+
+
 # --- Snapshot Publisher Destination Config ---
 
 @router.get("/snapshot-dest/list")

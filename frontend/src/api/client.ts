@@ -146,6 +146,10 @@ export const edmDestAdd = (data: any) =>
   request<any>('/mediation/destination/add', { method: 'POST', body: JSON.stringify(data) });
 export const edmDestDelete = (partition: string, fileType?: string) =>
   request<any>(`/mediation/destination/${partition}${fileType ? `?file_type=${fileType}` : ''}`, { method: 'DELETE' });
+export const edmDestRetransmitKey = (partition: string, destType: string) =>
+  request<any>('/mediation/destination/retransmit-key', { method: 'POST', body: JSON.stringify({ customerPartition: partition, sftpDestinationType: destType }) });
+export const edmDestRetransmitKeys = (partition: string) =>
+  request<any>('/mediation/destination/retransmit-keys', { method: 'POST', body: JSON.stringify({ customerPartition: partition }) });
 export const edmSnapshotDestList = (partition?: string) =>
   request<any>(`/mediation/snapshot-dest/list${partition ? `?customer_partition=${partition}` : ''}`);
 export const edmSnapshotDestGet = (partition?: string) =>

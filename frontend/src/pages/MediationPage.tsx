@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   edmTransformList, edmTransformActive, edmTransformActivate, edmTransformDelete,
-  edmDestList, edmDestGet, edmDestAdd, edmDestDelete,
+  edmDestList, edmDestGet, edmDestAdd, edmDestDelete, edmDestRetransmitKey, edmDestRetransmitKeys,
   edmSnapshotDestList, edmSnapshotDestGet, edmSnapshotDestAdd, edmSnapshotDestDelete,
   edmAsnList, edmAsnDelete, edmAsnGetAll,
   edmAppConfigGet, edmAppConfigUpdate, edmSnapshotAppConfigGet, edmSnapshotAppConfigUpdate,
@@ -21,6 +21,9 @@ export function MediationPage() {
   const [jsonInput, setJsonInput] = useState('');
 
   // Pub Destination form
+  const [destSubTab, setDestSubTab] = useState<'config' | 'retransmit'>('config');
+  const [retransmitPartition, setRetransmitPartition] = useState('1');
+  const [retransmitType, setRetransmitType] = useState('primary');
   const [partitionId, setPartitionId] = useState('1');
   const [sftpHost, setSftpHost] = useState('');
   const [sftpUser, setSftpUser] = useState('');
@@ -145,6 +148,13 @@ export function MediationPage() {
       {/* Publishing Destination */}
       {tab === 'destination' && (
         <div>
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+            <button className={`btn ${destSubTab === 'config' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setDestSubTab('config')}>Config</button>
+            <button className={`btn ${destSubTab === 'retransmit' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setDestSubTab('retransmit')}>Retransmit Keys</button>
+          </div>
+
+          {destSubTab === 'config' && (<div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
             <div className="form-group" style={{ margin: 0 }}><label>Partition</label><input value={partition} onChange={e => setPartition(e.target.value)} style={{ width: 60 }} /></div>
             <button className="btn btn-secondary" onClick={() => run(() => edmDestList(partition))} disabled={loading}>List</button>
@@ -209,6 +219,39 @@ export function MediationPage() {
           )}
 
           {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
+          </div>)}
+
+          {destSubTab === 'retransmit' && (
+            <div>
+              <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 12 }}>Retransmit SFTP public keys to destination servers.</p>
+              <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, maxWidth: 500, marginBottom: 12 }}>
+                <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Retransmit Key (single destination)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                  <div className="form-group" style={{ margin: 0 }}><label>Partition *</label><input value={retransmitPartition} onChange={e => setRetransmitPartition(e.target.value)} /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label>Destination Type</label>
+                    <select value={retransmitType} onChange={e => setRetransmitType(e.target.value)}>
+                      <option value="primary">Primary</option>
+                      <option value="secondary">Secondary</option>
+                      <option value="all">All</option>
+                    </select>
+                  </div>
+                </div>
+                <button className="btn btn-primary" onClick={() => run(() => edmDestRetransmitKey(retransmitPartition, retransmitType))} disabled={loading} style={{ marginTop: 8 }}>
+                  {loading ? 'Retransmitting...' : 'Retransmit Key'}
+                </button>
+              </div>
+
+              <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, maxWidth: 500 }}>
+                <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Retransmit All Keys (all destinations for partition)</label>
+                <div className="form-group" style={{ marginTop: 8 }}><label>Partition *</label><input value={retransmitPartition} onChange={e => setRetransmitPartition(e.target.value)} style={{ width: 80 }} /></div>
+                <button className="btn btn-primary" onClick={() => run(() => edmDestRetransmitKeys(retransmitPartition))} disabled={loading}>
+                  {loading ? 'Retransmitting...' : 'Retransmit All Keys'}
+                </button>
+              </div>
+
+              {output && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{output}</div>}
+            </div>
+          )}
         </div>
       )}
 
