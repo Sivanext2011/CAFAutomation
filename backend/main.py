@@ -13,6 +13,7 @@ from backend.api.sub_acct_loc_routes import router as sub_acct_loc_router
 from backend.api.mediation_routes import router as mediation_router
 from backend.api.access_mgmt_routes import router as access_mgmt_router
 from backend.api.alarm_routes import router as alarm_router
+from backend.api.backup_routes import router as backup_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -40,6 +41,7 @@ app.include_router(sub_acct_loc_router)
 app.include_router(mediation_router)
 app.include_router(access_mgmt_router)
 app.include_router(alarm_router)
+app.include_router(backup_router)
 app.include_router(ws_router)
 
 

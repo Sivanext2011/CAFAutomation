@@ -8,6 +8,7 @@ import { SubAcctLocPage } from './pages/SubAcctLocPage';
 import { MediationPage } from './pages/MediationPage';
 import { AccessMgmtPage } from './pages/AccessMgmtPage';
 import { AlarmsPage } from './pages/AlarmsPage';
+import { BackupPage } from './pages/BackupPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -29,6 +30,7 @@ function App() {
             <li><NavLink to="/mediation">Mediation</NavLink></li>
             <li><NavLink to="/access-mgmt">Access Mgmt</NavLink></li>
             <li><NavLink to="/alarms">Alarms</NavLink></li>
+            <li><NavLink to="/backup">Backup</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -44,6 +46,7 @@ function App() {
             <Route path="/mediation" element={<MediationPage />} />
             <Route path="/access-mgmt" element={<AccessMgmtPage />} />
             <Route path="/alarms" element={<AlarmsPage />} />
+            <Route path="/backup" element={<BackupPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

@@ -201,6 +201,36 @@ export const getAlarm = (data: any) =>
 export const clearAlarm = (data: any) =>
   request<any>('/alarms/clear', { method: 'POST', body: JSON.stringify(data) });
 
+// Backup & Restore
+export const backupHealth = () => request<any>('/backup/health');
+export const backupListManagers = () => request<any>('/backup/managers');
+export const backupListBackups = (brmId: string) => request<any>(`/backup/managers/${brmId}/backups`);
+export const backupCreate = (brmId: string, name: string) =>
+  request<any>(`/backup/managers/${brmId}/backups`, { method: 'POST', body: JSON.stringify({ name }) });
+export const backupGet = (brmId: string, name: string) => request<any>(`/backup/managers/${brmId}/backups/${name}`);
+export const backupDelete = (brmId: string, name: string) =>
+  request<any>(`/backup/managers/${brmId}/backups/${name}`, { method: 'DELETE' });
+export const backupRestore = (brmId: string, name: string) =>
+  request<any>(`/backup/managers/${brmId}/backups/${name}/restore`, { method: 'POST' });
+export const backupExport = (brmId: string, name: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/backups/${name}/export`, { method: 'POST', body: JSON.stringify(data) });
+export const backupImport = (brmId: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/import`, { method: 'POST', body: JSON.stringify(data) });
+export const backupListTasks = (brmId: string) => request<any>(`/backup/managers/${brmId}/tasks`);
+export const backupLastTask = (brmId: string) => request<any>(`/backup/managers/${brmId}/last-task`);
+export const backupListSftp = (brmId: string) => request<any>(`/backup/managers/${brmId}/sftp-servers`);
+export const backupCreateSftp = (brmId: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/sftp-servers`, { method: 'POST', body: JSON.stringify(data) });
+export const backupDeleteSftp = (brmId: string, name: string) =>
+  request<any>(`/backup/managers/${brmId}/sftp-servers/${name}`, { method: 'DELETE' });
+export const backupGetHousekeeping = (brmId: string) => request<any>(`/backup/managers/${brmId}/housekeeping`);
+export const backupPatchHousekeeping = (brmId: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/housekeeping`, { method: 'POST', body: JSON.stringify(data) });
+export const backupCreatePeriodic = (brmId: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/periodic-schedule`, { method: 'POST', body: JSON.stringify(data) });
+export const backupCreateCalendar = (brmId: string, data: any) =>
+  request<any>(`/backup/managers/${brmId}/calendar-schedule`, { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
