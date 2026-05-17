@@ -267,6 +267,27 @@ export const xdcGetFile = (id: string) =>
   request<any>(`/xdc/get-file/${id}`, { method: 'POST' });
 export const xdcConfigView = () => request<any>('/xdc/config');
 
+// Trace Management
+export const traceListJobs = (iface?: string, criteriaType?: string) => {
+  const params = new URLSearchParams();
+  if (iface) params.set('interface', iface);
+  if (criteriaType) params.set('criteria_type', criteriaType);
+  const q = params.toString();
+  return request<any>(`/trace/jobs${q ? `?${q}` : ''}`);
+};
+export const traceGetJob = (id: string) => request<any>(`/trace/jobs/${id}`);
+export const traceCreateJob = (data: any) =>
+  request<any>('/trace/jobs', { method: 'POST', body: JSON.stringify(data) });
+export const traceDeleteJob = (id: string) => request<any>(`/trace/jobs/${id}`, { method: 'DELETE' });
+export const traceStartJob = (id: string) => request<any>(`/trace/jobs/${id}/start`, { method: 'POST' });
+export const traceStopJob = (id: string) => request<any>(`/trace/jobs/${id}/stop`, { method: 'POST' });
+export const traceGetLogs = (id: string) => request<any>(`/trace/jobs/${id}/logs`);
+export const traceDeleteByInterface = (data: any) =>
+  request<any>('/trace/delete-by-interface', { method: 'POST', body: JSON.stringify(data) });
+export const traceGetConfig = () => request<any>('/trace/config');
+export const traceUpdateConfig = (data: any) =>
+  request<any>('/trace/config', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

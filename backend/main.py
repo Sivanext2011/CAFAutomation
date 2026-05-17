@@ -17,6 +17,7 @@ from backend.api.backup_routes import router as backup_router
 from backend.api.cert_mgmt_routes import router as cert_mgmt_router
 from backend.api.data_collector_routes import router as data_collector_router
 from backend.api.xdc_routes import router as xdc_router
+from backend.api.trace_routes import router as trace_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -48,6 +49,7 @@ app.include_router(backup_router)
 app.include_router(cert_mgmt_router)
 app.include_router(data_collector_router)
 app.include_router(xdc_router)
+app.include_router(trace_router)
 app.include_router(ws_router)
 
 
