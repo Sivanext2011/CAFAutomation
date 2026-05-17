@@ -13,6 +13,7 @@ import { CertMgmtPage } from './pages/CertMgmtPage';
 import { DataCollectorPage } from './pages/DataCollectorPage';
 import { XdcPage } from './pages/XdcPage';
 import { TracePage } from './pages/TracePage';
+import { EnmPage } from './pages/EnmPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -39,6 +40,7 @@ function App() {
             <li><NavLink to="/data-collect">Data Collection</NavLink></li>
             <li><NavLink to="/xdc">Extended DC</NavLink></li>
             <li><NavLink to="/trace">Trace</NavLink></li>
+            <li><NavLink to="/enm">ENM</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -59,6 +61,7 @@ function App() {
             <Route path="/data-collect" element={<DataCollectorPage />} />
             <Route path="/xdc" element={<XdcPage />} />
             <Route path="/trace" element={<TracePage />} />
+            <Route path="/enm" element={<EnmPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

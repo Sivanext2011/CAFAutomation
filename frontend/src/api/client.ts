@@ -288,6 +288,12 @@ export const traceGetConfig = () => request<any>('/trace/config');
 export const traceUpdateConfig = (data: any) =>
   request<any>('/trace/config', { method: 'POST', body: JSON.stringify(data) });
 
+// ENM Integration
+export const enmGenerateSnmpConfig = (data: any) =>
+  request<any>('/enm/generate-snmp-config', { method: 'POST', body: JSON.stringify(data) });
+export const enmPushToGit = (data: any) =>
+  request<any>('/enm/push-to-git', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
