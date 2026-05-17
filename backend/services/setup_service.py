@@ -24,12 +24,14 @@ async def perform_initial_setup(config: SetupConfig) -> dict:
     download_job = await download_beamctl(beam_fqdn)
     results["download_beamctl"] = download_job.model_dump()
 
-    if download_job.status != "success":
-        raise RuntimeError(f"Failed to download beamctl: {download_job.stderr}")
-
-    # Download bamctl binary to ./bin/
+    # Download bamctl binary to ./bin/ (from BAM CLI server)
     bam_job = await download_bamctl(bam_fqdn)
     results["download_bamctl"] = bam_job.model_dump()
+
+    if download_job.status != "success":
+        raise RuntimeError(f"Failed to download beamctl: {download_job.stderr}")
+    if bam_job.status != "success":
+        raise RuntimeError(f"Failed to download bamctl: {bam_job.stderr}")
 
     # Save kubeconfig content to ./bin/kubeconfig
     if config.kubeconfig_content:
