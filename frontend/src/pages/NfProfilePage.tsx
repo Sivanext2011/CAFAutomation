@@ -4,7 +4,6 @@ import { listNfProfileConfig } from '../api/client';
 export function NfProfilePage() {
   const [profiles, setProfiles] = useState<any>(null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   useEffect(() => { loadProfiles(); }, []);
 
@@ -24,7 +23,6 @@ export function NfProfilePage() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
 
       <div className="console" style={{ marginBottom: 16 }}>
         {profiles?.job?.stdout || 'Loading NF Profile configuration...'}
