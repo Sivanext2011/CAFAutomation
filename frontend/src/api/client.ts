@@ -294,6 +294,12 @@ export const enmGenerateSnmpConfig = (data: any) =>
 export const enmPushToGit = (data: any) =>
   request<any>('/enm/push-to-git', { method: 'POST', body: JSON.stringify(data) });
 
+// Syslog Integration
+export const syslogGenerateConfig = (data: any) =>
+  request<any>('/syslog/generate-config', { method: 'POST', body: JSON.stringify(data) });
+export const syslogPushToGit = (data: any) =>
+  request<any>('/syslog/push-to-git', { method: 'POST', body: JSON.stringify(data) });
+
 // WebSocket
 export function connectJobWebSocket(jobId: string, onMessage: (msg: string) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

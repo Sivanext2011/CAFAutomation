@@ -14,6 +14,7 @@ import { DataCollectorPage } from './pages/DataCollectorPage';
 import { XdcPage } from './pages/XdcPage';
 import { TracePage } from './pages/TracePage';
 import { EnmPage } from './pages/EnmPage';
+import { SyslogPage } from './pages/SyslogPage';
 import { JobsPage } from './pages/JobsPage';
 import './App.css';
 
@@ -41,6 +42,7 @@ function App() {
             <li><NavLink to="/xdc">Extended DC</NavLink></li>
             <li><NavLink to="/trace">Trace</NavLink></li>
             <li><NavLink to="/enm">ENM</NavLink></li>
+            <li><NavLink to="/syslog">Syslog</NavLink></li>
             <li><NavLink to="/jobs">Jobs</NavLink></li>
           </ul>
         </nav>
@@ -62,6 +64,7 @@ function App() {
             <Route path="/xdc" element={<XdcPage />} />
             <Route path="/trace" element={<TracePage />} />
             <Route path="/enm" element={<EnmPage />} />
+            <Route path="/syslog" element={<SyslogPage />} />
             <Route path="/jobs" element={<JobsPage />} />
           </Routes>
         </main>

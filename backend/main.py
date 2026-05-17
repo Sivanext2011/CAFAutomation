@@ -19,6 +19,7 @@ from backend.api.data_collector_routes import router as data_collector_router
 from backend.api.xdc_routes import router as xdc_router
 from backend.api.trace_routes import router as trace_router
 from backend.api.enm_routes import router as enm_router
+from backend.api.syslog_routes import router as syslog_router
 
 app = FastAPI(
     title="CAF Automation Portal",
@@ -52,6 +53,7 @@ app.include_router(data_collector_router)
 app.include_router(xdc_router)
 app.include_router(trace_router)
 app.include_router(enm_router)
+app.include_router(syslog_router)
 app.include_router(ws_router)
 
 
