@@ -156,17 +156,46 @@ def generate_template() -> bytes:
     ws8.append(["syslog.example.com", "514", "udp", "false", "", '[{"field":"log_type","value":"audit"}]'])
     _auto_width(ws8)
 
-    # --- Sheet 9: Certificate Mappings ---
-    ws9 = wb.create_sheet("Certificates")
-    ws9.cell(1, 1, "Certificate Service Mappings").font = Font(bold=True, size=13, color="1A73E8")
-    ws9.cell(2, 1, "Note: Actual cert files must be uploaded via UI. This sheet defines mappings only.").font = Font(italic=True, color="90A4AE")
+    # --- Sheet 9: Mediation (EDM Destinations) ---
+    ws9 = wb.create_sheet("Mediation")
+    ws9.cell(1, 1, "Mediation - Publishing Destinations").font = Font(bold=True, size=13, color="1A73E8")
     ws9.append([])
-    headers9 = ["Service Name", "Key Name", "Cert Name", "Trust List Name"]
+
+    s_headers = ["Retry Attempts", "Binary Mode", "Strict Host Key", "Conn Timeout (ms)"]
+    ws9.append(s_headers)
+    _style_settings_header(ws9, 3, len(s_headers))
+    ws9.append(["0", "false", "yes", "5000"])
+    for c in range(1, 5):
+        ws9.cell(4, c).fill = EXAMPLE_FILL
+        ws9.cell(4, c).border = THIN_BORDER
+
+    ws9.append([])
+    ws9.append([])
+    headers9 = ["Partition ID", "File Type", "Primary Host", "Primary Port", "Primary User",
+                "Primary Password", "Primary Dest Folder", "Primary Error Folder",
+                "Secondary Host", "Secondary Port", "Secondary User", "Secondary Password",
+                "Secondary Dest Folder", "Secondary Error Folder"]
     ws9.append(headers9)
-    _style_header(ws9, 4, len(headers9))
-    ws9.append(["NRF SBI", "nrf-sbi-key", "nrf-sbi-cert", "nrf-trusted-ca"])
-    ws9.append(["SCP SBI", "scp-sbi-key", "scp-sbi-cert", "scp-trusted-ca"])
+    _style_header(ws9, 7, len(headers9))
+    ws9.append(["1", "CDR", "sftp.example.com", "22", "sftpuser", "pass123",
+                "/upload/cdr/", "/upload/cdr_error/",
+                "sftp-bkp.example.com", "22", "sftpuser", "pass123",
+                "/upload/cdr/", "/upload/cdr_error/"])
+    ws9.append(["1", "SNAPSHOT", "sftp.example.com", "22", "sftpuser", "pass123",
+                "/upload/snapshot/", "/upload/snapshot_error/", "", "", "", "", "", ""])
     _auto_width(ws9)
+
+    # --- Sheet 10: Certificate Mappings ---
+    ws10 = wb.create_sheet("Certificates")
+    ws10.cell(1, 1, "Certificate Service Mappings").font = Font(bold=True, size=13, color="1A73E8")
+    ws10.cell(2, 1, "Note: Actual cert files must be uploaded via UI. This sheet defines mappings only.").font = Font(italic=True, color="90A4AE")
+    ws10.append([])
+    headers10 = ["Service Name", "Key Name", "Cert Name", "Trust List Name"]
+    ws10.append(headers10)
+    _style_header(ws10, 4, len(headers10))
+    ws10.append(["NRF SBI", "nrf-sbi-key", "nrf-sbi-cert", "nrf-trusted-ca"])
+    ws10.append(["SCP SBI", "scp-sbi-key", "scp-sbi-cert", "scp-trusted-ca"])
+    _auto_width(ws10)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -485,6 +514,50 @@ def parse_excel(file_bytes: bytes) -> dict:
                     except: pass
                 entries.append(entry)
         result["syslog"] = entries
+
+    # --- Mediation ---
+    if "Mediation" in wb.sheetnames:
+        ws = wb["Mediation"]
+        rows = list(ws.iter_rows(values_only=True))
+        settings = {}
+        entries = []
+        settings_found = False
+        data_found = False
+        for row in rows:
+            if row and row[0] and str(row[0]).strip().lower() == "retry attempts":
+                settings_found = True
+                continue
+            if settings_found and not settings and row and row[0] is not None:
+                settings = {
+                    "retryAttempts": str(row[0] or "0"),
+                    "binaryMode": str(row[1] or "false"),
+                    "strictHostKey": str(row[2] or "yes"),
+                    "connTimeout": str(row[3] or "5000"),
+                }
+                settings_found = False
+                continue
+            if row and row[0] and str(row[0]).strip().lower() == "partition id":
+                data_found = True
+                continue
+            if data_found and row and row[0] is not None:
+                entry = {
+                    "partitionId": str(row[0]),
+                    "fileType": str(row[1] or "") if len(row) > 1 else "",
+                    "primaryHost": str(row[2] or "") if len(row) > 2 else "",
+                    "primaryPort": str(row[3] or "22") if len(row) > 3 else "22",
+                    "primaryUser": str(row[4] or "") if len(row) > 4 else "",
+                    "primaryPassword": str(row[5] or "") if len(row) > 5 else "",
+                    "primaryDestFolder": str(row[6] or "") if len(row) > 6 else "",
+                    "primaryErrorFolder": str(row[7] or "") if len(row) > 7 else "",
+                    "secondaryHost": str(row[8] or "") if len(row) > 8 else "",
+                    "secondaryPort": str(row[9] or "22") if len(row) > 9 else "22",
+                    "secondaryUser": str(row[10] or "") if len(row) > 10 else "",
+                    "secondaryPassword": str(row[11] or "") if len(row) > 11 else "",
+                    "secondaryDestFolder": str(row[12] or "") if len(row) > 12 else "",
+                    "secondaryErrorFolder": str(row[13] or "") if len(row) > 13 else "",
+                }
+                entries.append(entry)
+        result["mediation"] = {"settings": settings, "entries": entries}
 
     # --- Certificates ---
     if "Certificates" in wb.sheetnames:

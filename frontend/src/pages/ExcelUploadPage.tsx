@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, syslogGenerateConfig, saveCertMappings } from '../api/client';
+import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, syslogGenerateConfig, saveCertMappings, edmDestAdd } from '../api/client';
 
 export function ExcelUploadPage() {
   const navigate = useNavigate();
@@ -152,6 +152,47 @@ export function ExcelUploadPage() {
         results.push(`Syslog: ${parsed.syslog.length} config(s) generated`);
       }
 
+      // Mediation
+      if (parsed.mediation?.entries?.length) {
+        const settings = parsed.mediation.settings || {};
+        for (const m of parsed.mediation.entries) {
+          const config: any = {
+            sftp: {
+              commonConfig: {
+                sftpRetryAttempts: settings.retryAttempts || '0',
+                sftpBinaryMode: settings.binaryMode || 'false',
+                sftpStrictHostKeyCheck: settings.strictHostKey || 'yes',
+                sftpConnectionTimeout: settings.connTimeout || '5000',
+              },
+              partitionConfigs: [{
+                partitionId: m.partitionId,
+                primaryDestination: {
+                  sftpHostname: m.primaryHost,
+                  sftpUserName: m.primaryUser,
+                  sftpPassword: m.primaryPassword,
+                  sftpPortNumber: m.primaryPort,
+                  sftpDestinationFolder: m.primaryDestFolder,
+                  sftpErrorDestinationFolder: m.primaryErrorFolder || m.primaryDestFolder + '_error',
+                },
+              }],
+            },
+          };
+          if (m.fileType) config.sftp.partitionConfigs[0].fileType = m.fileType;
+          if (m.secondaryHost) {
+            config.sftp.partitionConfigs[0].secondaryDestination = {
+              sftpHostname: m.secondaryHost,
+              sftpUserName: m.secondaryUser || m.primaryUser,
+              sftpPassword: m.secondaryPassword || m.primaryPassword,
+              sftpPortNumber: m.secondaryPort || '22',
+              sftpDestinationFolder: m.secondaryDestFolder || m.primaryDestFolder,
+              sftpErrorDestinationFolder: m.secondaryErrorFolder || m.primaryErrorFolder || m.primaryDestFolder + '_error',
+            };
+          }
+          await edmDestAdd({ customerPartition: m.partitionId, payload: config });
+        }
+        results.push(`Mediation: ${parsed.mediation.entries.length} destination(s)`);
+      }
+
       // Certificates (mappings only)
       if (parsed.certificates?.length) {
         await saveCertMappings({ services: parsed.certificates });
@@ -174,6 +215,7 @@ export function ExcelUploadPage() {
   const enmCount = parsed?.enm?.length || 0;
   const syslogCount = parsed?.syslog?.length || 0;
   const certCount = parsed?.certificates?.length || 0;
+  const medCount = parsed?.mediation?.entries?.length || 0;
 
   return (
     <div>
@@ -217,6 +259,7 @@ export function ExcelUploadPage() {
             {nfCount > 0 && <span className="badge badge-success">NF Profile: {nfCount}</span>}
             {enmCount > 0 && <span className="badge badge-success">ENM: {enmCount}</span>}
             {syslogCount > 0 && <span className="badge badge-success">Syslog: {syslogCount}</span>}
+            {medCount > 0 && <span className="badge badge-success">Mediation: {medCount}</span>}
             {certCount > 0 && <span className="badge badge-success">Cert Mappings: {certCount}</span>}
           </div>
 
@@ -287,6 +330,17 @@ export function ExcelUploadPage() {
               <table className="data-table" style={{ marginTop: 4 }}>
                 <thead><tr><th>Service</th><th>Key Name</th><th>Cert Name</th><th>Trust List</th></tr></thead>
                 <tbody>{parsed.certificates.map((c: any, i: number) => <tr key={i}><td>{c.serviceName}</td><td>{c.keyName}</td><td>{c.certName}</td><td>{c.trustListName}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Mediation Preview */}
+          {medCount > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>Mediation Destinations ({medCount})</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>Partition</th><th>File Type</th><th>Primary Host</th><th>Primary User</th><th>Primary Folder</th><th>Secondary Host</th></tr></thead>
+                <tbody>{parsed.mediation.entries.map((m: any, i: number) => <tr key={i}><td>{m.partitionId}</td><td>{m.fileType}</td><td>{m.primaryHost}</td><td>{m.primaryUser}</td><td style={{ fontSize: 10 }}>{m.primaryDestFolder}</td><td>{m.secondaryHost || '-'}</td></tr>)}</tbody>
               </table>
             </div>
           )}
