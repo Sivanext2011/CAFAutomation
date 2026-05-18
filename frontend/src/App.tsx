@@ -16,6 +16,7 @@ import { TracePage } from './pages/TracePage';
 import { EnmPage } from './pages/EnmPage';
 import { SyslogPage } from './pages/SyslogPage';
 import { JobsPage } from './pages/JobsPage';
+import { ExcelUploadPage } from './pages/ExcelUploadPage';
 import './App.css';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
           </div>
           <ul className="nav-list">
             <li><NavLink to="/setup">Setup</NavLink></li>
+            <li><NavLink to="/excel">Excel Deploy</NavLink></li>
             <li><NavLink to="/nrf-servers">NRF Servers</NavLink></li>
             <li><NavLink to="/sdp">SDP Integration</NavLink></li>
             <li><NavLink to="/diameter">Diameter</NavLink></li>
@@ -50,6 +52,7 @@ function App() {
           <Routes>
             <Route path="/" element={<SetupPage />} />
             <Route path="/setup" element={<SetupPage />} />
+            <Route path="/excel" element={<ExcelUploadPage />} />
             <Route path="/nrf-servers" element={<NrfPage />} />
             <Route path="/sdp" element={<SdpPage />} />
             <Route path="/diameter" element={<DiameterPage />} />
