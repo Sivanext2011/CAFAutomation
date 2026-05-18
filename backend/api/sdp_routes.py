@@ -62,7 +62,7 @@ async def check_peer_status(data: dict):
         kube_args.extend(["--kubeconfig", kubeconfig])
 
     exec_args = kube_args + [
-        "-n", namespace, "exec", "-it", "eric-bss-cha-diameter-lb-0", "--",
+        "-n", namespace, "exec", "eric-bss-cha-diameter-lb-0", "--",
         "client", "peerlist",
     ]
 
