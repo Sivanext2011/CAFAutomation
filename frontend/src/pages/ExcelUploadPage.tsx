@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc } from '../api/client';
+import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, syslogGenerateConfig, saveCertMappings } from '../api/client';
 
 export function ExcelUploadPage() {
   const navigate = useNavigate();
@@ -136,6 +136,28 @@ export function ExcelUploadPage() {
         results.push(`NF Profile: ${parsed.nfProfile.length}`);
       }
 
+      // ENM
+      if (parsed.enm?.length) {
+        for (const e of parsed.enm) {
+          await enmGenerateSnmpConfig(e);
+        }
+        results.push(`ENM: ${parsed.enm.length} config(s) generated`);
+      }
+
+      // Syslog
+      if (parsed.syslog?.length) {
+        for (const s of parsed.syslog) {
+          await syslogGenerateConfig(s);
+        }
+        results.push(`Syslog: ${parsed.syslog.length} config(s) generated`);
+      }
+
+      // Certificates (mappings only)
+      if (parsed.certificates?.length) {
+        await saveCertMappings({ services: parsed.certificates });
+        results.push(`Cert Mappings: ${parsed.certificates.length}`);
+      }
+
       setPopup({ type: 'success', message: `Deployed: ${results.join(' | ')}` });
     } catch (e: any) {
       setPopup({ type: 'error', message: e.message || 'Deploy failed' });
@@ -149,6 +171,9 @@ export function ExcelUploadPage() {
   const oauthCount = parsed?.oauthServers?.length || 0;
   const nfCount = parsed?.nfProfile?.length || 0;
   const diaCount = parsed?.diameter?.entries?.length || 0;
+  const enmCount = parsed?.enm?.length || 0;
+  const syslogCount = parsed?.syslog?.length || 0;
+  const certCount = parsed?.certificates?.length || 0;
 
   return (
     <div>
@@ -190,6 +215,9 @@ export function ExcelUploadPage() {
             {nrfCount > 0 && <span className="badge badge-success">NRF Servers: {nrfCount}</span>}
             {oauthCount > 0 && <span className="badge badge-success">OAuth: {oauthCount}</span>}
             {nfCount > 0 && <span className="badge badge-success">NF Profile: {nfCount}</span>}
+            {enmCount > 0 && <span className="badge badge-success">ENM: {enmCount}</span>}
+            {syslogCount > 0 && <span className="badge badge-success">Syslog: {syslogCount}</span>}
+            {certCount > 0 && <span className="badge badge-success">Cert Mappings: {certCount}</span>}
           </div>
 
           {/* SDP Preview */}
@@ -226,6 +254,39 @@ export function ExcelUploadPage() {
               <table className="data-table" style={{ marginTop: 4 }}>
                 <thead><tr><th>SDP Name</th><th>IP</th><th>Partition</th></tr></thead>
                 <tbody>{parsed.subAcctLoc.slice(0, 10).map((s: any, i: number) => <tr key={i}><td>{s.name}</td><td>{s.ip}</td><td>{s.partitionId}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ENM Preview */}
+          {enmCount > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>ENM ({enmCount})</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>OAM IP</th><th>ENM VIP</th><th>Port</th><th>Version</th></tr></thead>
+                <tbody>{parsed.enm.map((e: any, i: number) => <tr key={i}><td>{e.oamIngressIp}</td><td>{e.enmFmVip}</td><td>{e.enmPort}</td><td>{e.version}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Syslog Preview */}
+          {syslogCount > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>Syslog ({syslogCount})</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>TLS</th></tr></thead>
+                <tbody>{parsed.syslog.map((s: any, i: number) => <tr key={i}><td>{s.host}</td><td>{s.port}</td><td>{s.protocol}</td><td>{String(s.tlsEnabled)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Cert Mappings Preview */}
+          {certCount > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>Certificate Mappings ({certCount})</label>
+              <table className="data-table" style={{ marginTop: 4 }}>
+                <thead><tr><th>Service</th><th>Key Name</th><th>Cert Name</th><th>Trust List</th></tr></thead>
+                <tbody>{parsed.certificates.map((c: any, i: number) => <tr key={i}><td>{c.serviceName}</td><td>{c.keyName}</td><td>{c.certName}</td><td>{c.trustListName}</td></tr>)}</tbody>
               </table>
             </div>
           )}

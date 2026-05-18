@@ -135,6 +135,39 @@ def generate_template() -> bytes:
                 "0", "100", "SMF,SMSF,PCF", '[{"mcc":"240","mnc":"01"}]', '[{"sst":1}]', "", ""])
     _auto_width(ws6)
 
+    # --- Sheet 7: ENM Integration ---
+    ws7 = wb.create_sheet("ENM")
+    ws7.cell(1, 1, "ENM SNMP Alarm Integration").font = Font(bold=True, size=13, color="1A73E8")
+    ws7.append([])
+    headers7 = ["OAM Ingress IP", "ENM FM VIP", "ENM Port", "SNMP Version", "Community",
+                "Username", "Security Level", "Auth Protocol", "Auth Password", "Priv Protocol", "Priv Password"]
+    ws7.append(headers7)
+    _style_header(ws7, 3, len(headers7))
+    ws7.append(["10.0.0.100", "10.0.0.200", "162", "v2c", "public", "", "", "", "", "", ""])
+    _auto_width(ws7)
+
+    # --- Sheet 8: Syslog ---
+    ws8 = wb.create_sheet("Syslog")
+    ws8.cell(1, 1, "Syslog Egress Configuration").font = Font(bold=True, size=13, color="1A73E8")
+    ws8.append([])
+    headers8 = ["Host", "Port", "Protocol", "TLS Enabled", "Trust List Name", "Inclusions (JSON)"]
+    ws8.append(headers8)
+    _style_header(ws8, 3, len(headers8))
+    ws8.append(["syslog.example.com", "514", "udp", "false", "", '[{"field":"log_type","value":"audit"}]'])
+    _auto_width(ws8)
+
+    # --- Sheet 9: Certificate Mappings ---
+    ws9 = wb.create_sheet("Certificates")
+    ws9.cell(1, 1, "Certificate Service Mappings").font = Font(bold=True, size=13, color="1A73E8")
+    ws9.cell(2, 1, "Note: Actual cert files must be uploaded via UI. This sheet defines mappings only.").font = Font(italic=True, color="90A4AE")
+    ws9.append([])
+    headers9 = ["Service Name", "Key Name", "Cert Name", "Trust List Name"]
+    ws9.append(headers9)
+    _style_header(ws9, 4, len(headers9))
+    ws9.append(["NRF SBI", "nrf-sbi-key", "nrf-sbi-cert", "nrf-trusted-ca"])
+    ws9.append(["SCP SBI", "scp-sbi-key", "scp-sbi-cert", "scp-trusted-ca"])
+    _auto_width(ws9)
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -401,5 +434,75 @@ def parse_excel(file_bytes: bytes) -> dict:
                     except: pass
                 entries.append(profile)
         result["nfProfile"] = entries
+
+    # --- ENM ---
+    if "ENM" in wb.sheetnames:
+        ws = wb["ENM"]
+        rows = list(ws.iter_rows(values_only=True))
+        entries = []
+        data_found = False
+        for row in rows:
+            if row and row[0] and str(row[0]).strip().lower() == "oam ingress ip":
+                data_found = True
+                continue
+            if data_found and row and row[0]:
+                entry = {
+                    "oamIngressIp": str(row[0]),
+                    "enmFmVip": str(row[1] or ""),
+                    "enmPort": str(row[2] or "162"),
+                    "version": str(row[3] or "v2c"),
+                    "community": str(row[4] or "public") if len(row) > 4 else "public",
+                }
+                if len(row) > 5 and row[5]: entry["userName"] = str(row[5])
+                if len(row) > 6 and row[6]: entry["securityLevel"] = str(row[6])
+                if len(row) > 7 and row[7]: entry["authProtocol"] = str(row[7])
+                if len(row) > 8 and row[8]: entry["authPassword"] = str(row[8])
+                if len(row) > 9 and row[9]: entry["privProtocol"] = str(row[9])
+                if len(row) > 10 and row[10]: entry["privPassword"] = str(row[10])
+                entries.append(entry)
+        result["enm"] = entries
+
+    # --- Syslog ---
+    if "Syslog" in wb.sheetnames:
+        ws = wb["Syslog"]
+        rows = list(ws.iter_rows(values_only=True))
+        entries = []
+        data_found = False
+        for row in rows:
+            if row and row[0] and str(row[0]).strip().lower() == "host":
+                data_found = True
+                continue
+            if data_found and row and row[0]:
+                entry = {
+                    "host": str(row[0]),
+                    "port": str(row[1] or "514"),
+                    "protocol": str(row[2] or "udp"),
+                    "tlsEnabled": str(row[3] or "false").lower() == "true" if len(row) > 3 else False,
+                    "trustListName": str(row[4] or "") if len(row) > 4 else "",
+                }
+                if len(row) > 5 and row[5]:
+                    try: entry["inclusions"] = json.loads(str(row[5]))
+                    except: pass
+                entries.append(entry)
+        result["syslog"] = entries
+
+    # --- Certificates ---
+    if "Certificates" in wb.sheetnames:
+        ws = wb["Certificates"]
+        rows = list(ws.iter_rows(values_only=True))
+        entries = []
+        data_found = False
+        for row in rows:
+            if row and row[0] and str(row[0]).strip().lower() == "service name":
+                data_found = True
+                continue
+            if data_found and row and row[0]:
+                entries.append({
+                    "serviceName": str(row[0]),
+                    "keyName": str(row[1] or ""),
+                    "certName": str(row[2] or ""),
+                    "trustListName": str(row[3] or ""),
+                })
+        result["certificates"] = entries
 
     return result
