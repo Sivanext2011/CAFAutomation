@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listSdpRealms, updateSdpRealms, listSdpPeers, updateSdpPeers, checkSdpPeerStatus } from '../api/client';
 
-interface SdpEntry {
-  realm: string;
-  sdpIds: string;
-  peerHosts: string;
-}
+interface PeerEntry { host: string; connectAddresses: string; }
+interface IndexEntry { index: number; peers: PeerEntry[]; }
+interface SdpEntry { realm: string; sdpIds: string; indexes: IndexEntry[]; }
 
-const DEFAULT_APPS = '16777232,16777302,16777304';
+const DEFAULT_APPS = '16777232,16777359,16777302,16777304,16777361';
 
 export function SdpPage() {
   const navigate = useNavigate();
@@ -16,9 +14,9 @@ export function SdpPage() {
   const [loading, setLoading] = useState(false);
   const [popup, setPopup] = useState<{ type: 'success' | 'error'; message: string; jobId?: string } | null>(null);
 
-  // Bulk integration
-  const [entries, setEntries] = useState<SdpEntry[]>([{ realm: '', sdpIds: '', peerHosts: '' }]);
-  const [appGrp, setAppGrp] = useState('cha1');
+  // Integration
+  const [entries, setEntries] = useState<SdpEntry[]>([{ realm: '', sdpIds: '', indexes: [{ index: 1, peers: [{ host: '', connectAddresses: '' }] }] }]);
+  const [appGrps, setAppGrps] = useState('cha1');
   const [transport, setTransport] = useState('sctp');
   const [port, setPort] = useState('3868');
   const [strategy, setStrategy] = useState('round-robin');
@@ -27,124 +25,106 @@ export function SdpPage() {
   const [raiseAlarm, setRaiseAlarm] = useState(true);
   const [realmsJson, setRealmsJson] = useState('');
   const [peersJson, setPeersJson] = useState('');
-  const [bulkText, setBulkText] = useState('');
-  const [inputMode, setInputMode] = useState<'form' | 'bulk'>('form');
 
   // Current config
-  const [realmsOutput, setRealmsOutput] = useState('');
-  const [peersOutput, setPeersOutput] = useState('');
   const [currentRealms, setCurrentRealms] = useState<any[]>([]);
   const [currentPeers, setCurrentPeers] = useState<any[]>([]);
   const [configModified, setConfigModified] = useState(false);
+  const [filterAppGrp, setFilterAppGrp] = useState('');
 
   // Status
   const [statusOutput, setStatusOutput] = useState('');
   const [statusPort, setStatusPort] = useState('3868');
   const [statusTransport, setStatusTransport] = useState('sctp');
 
-  function addEntry() {
-    setEntries([...entries, { realm: '', sdpIds: '', peerHosts: '' }]);
+  // Entry management
+  function addEntry() { setEntries([...entries, { realm: '', sdpIds: '', indexes: [{ index: 1, peers: [{ host: '', connectAddresses: '' }] }] }]); }
+  function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)); }
+  function updateEntryField(i: number, field: 'realm' | 'sdpIds', val: string) {
+    const u = [...entries]; u[i] = { ...u[i], [field]: val }; setEntries(u);
+  }
+  function addIndex(ei: number) {
+    const u = [...entries];
+    const nextIdx = u[ei].indexes.length + 1;
+    u[ei].indexes.push({ index: nextIdx, peers: [{ host: '', connectAddresses: '' }] });
+    setEntries(u);
+  }
+  function removeIndex(ei: number, ii: number) {
+    const u = [...entries]; u[ei].indexes = u[ei].indexes.filter((_, idx) => idx !== ii); setEntries(u);
+  }
+  function addPeer(ei: number, ii: number) {
+    const u = [...entries]; u[ei].indexes[ii].peers.push({ host: '', connectAddresses: '' }); setEntries(u);
+  }
+  function removePeer(ei: number, ii: number, pi: number) {
+    const u = [...entries]; u[ei].indexes[ii].peers = u[ei].indexes[ii].peers.filter((_, idx) => idx !== pi); setEntries(u);
+  }
+  function updatePeer(ei: number, ii: number, pi: number, field: 'host' | 'connectAddresses', val: string) {
+    const u = [...entries]; u[ei].indexes[ii].peers[pi] = { ...u[ei].indexes[ii].peers[pi], [field]: val }; setEntries(u);
   }
 
-  function removeEntry(i: number) {
-    setEntries(entries.filter((_, idx) => idx !== i));
-  }
-
-  function updateEntry(i: number, field: keyof SdpEntry, value: string) {
-    const updated = [...entries];
-    updated[i] = { ...updated[i], [field]: value };
-    setEntries(updated);
-  }
-
-  function parseBulkText(): SdpEntry[] {
-    return bulkText.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
-      const parts = line.split('|').map(p => p.trim());
-      return {
-        realm: parts[0] || '',
-        sdpIds: parts[1] || '',
-        peerHosts: parts[2] || parts[0] || '',
-      };
-    }).filter(e => e.peerHosts);
-  }
+  function buildUri(host: string) { return `aaa://${host}:${port};transport=${transport}`; }
 
   async function generateJson() {
-    const source = inputMode === 'form' ? entries : parseBulkText();
-    const valid = source.filter(e => e.peerHosts);
-    if (valid.length === 0) {
-      setPopup({ type: 'error', message: 'No valid entries. Each needs at least peer hosts.' });
-      return;
-    }
+    const valid = entries.filter(e => e.realm && e.indexes.some(idx => idx.peers.some(p => p.host)));
+    if (!valid.length) { setPopup({ type: 'error', message: 'No valid entries' }); return; }
 
     setLoading(true);
-
-    // Fetch existing realms and peers to merge
-    let existingRealms: any[] = [];
-    let existingPeers: any[] = [];
-    try {
-      const rResult = await listSdpRealms();
-      if (rResult.job?.stdout) {
-        try { existingRealms = JSON.parse(rResult.job.stdout); } catch {}
-      }
-    } catch {}
-    try {
-      const pResult = await listSdpPeers();
-      if (pResult.job?.stdout) {
-        try { existingPeers = JSON.parse(pResult.job.stdout); } catch {}
-      }
-    } catch {}
+    let existingRealms: any[] = [], existingPeers: any[] = [];
+    try { const r = await listSdpRealms(); if (r.job?.stdout) try { existingRealms = JSON.parse(r.job.stdout); } catch {} } catch {}
+    try { const r = await listSdpPeers(); if (r.job?.stdout) try { existingPeers = JSON.parse(r.job.stdout); } catch {} } catch {}
     if (!Array.isArray(existingRealms)) existingRealms = [];
     if (!Array.isArray(existingPeers)) existingPeers = [];
 
     const appList = apps.split(',').map(s => s.trim()).filter(Boolean);
-    const newPeerUris: string[] = [];
+    const appGrpList = appGrps.split(',').map(s => s.trim()).filter(Boolean);
 
-    // Build new realms
-    const newRealms = valid.filter(e => e.realm).map(e => {
-      const hosts = e.peerHosts.split(',').map(h => h.trim()).filter(Boolean);
-      const peerAddresses = hosts.map(h => {
-        const uri = `aaa://${h}:${port};transport=${transport}`;
-        if (!newPeerUris.includes(uri)) newPeerUris.push(uri);
-        return uri;
+    const newRealms: any[] = [];
+    const newPeers: any[] = [];
+    const seenPeers = new Set<string>();
+
+    valid.forEach(e => {
+      appGrpList.forEach(grp => {
+        const addresses = e.indexes.map(idx => ({
+          index: idx.index,
+          peerAddresses: idx.peers.filter(p => p.host).map(p => buildUri(p.host)),
+        })).filter(a => a.peerAddresses.length);
+
+        newRealms.push({
+          realm: e.realm,
+          appGrp: grp,
+          sdp_id: e.sdpIds ? e.sdpIds.split(',').map(s => s.trim()).filter(Boolean) : [e.realm],
+          applications: appList,
+          initiateConnection: initiate,
+          strategy,
+          addresses,
+        });
+
+        // Build peers
+        e.indexes.forEach(idx => {
+          idx.peers.filter(p => p.host).forEach(p => {
+            const uri = buildUri(p.host);
+            const key = `${uri}|${grp}`;
+            if (!seenPeers.has(key)) {
+              seenPeers.add(key);
+              const peer: any = { peer: uri, appGrp: grp, initiateConnection: initiate, raiseAlarm };
+              if (p.connectAddresses) peer.connectAddresses = p.connectAddresses.split(',').map(s => s.trim()).filter(Boolean);
+              newPeers.push(peer);
+            }
+          });
+        });
       });
-      return {
-        realm: e.realm.trim(),
-        appGrp,
-        sdp_id: e.sdpIds ? e.sdpIds.split(',').map(s => s.trim()).filter(Boolean) : [e.realm.trim()],
-        applications: appList,
-        strategy,
-        addresses: [{ index: 1, peerAddresses }],
-      };
     });
 
-    // Peer-only entries
-    valid.filter(e => !e.realm).forEach(e => {
-      e.peerHosts.split(',').map(h => h.trim()).filter(Boolean).forEach(h => {
-        const uri = `aaa://${h}:${port};transport=${transport}`;
-        if (!newPeerUris.includes(uri)) newPeerUris.push(uri);
-      });
-    });
-
-    // Build new peers
-    const newPeers = newPeerUris.map(uri => ({
-      peer: uri,
-      appGrp,
-      initiateConnection: initiate,
-      raiseAlarm,
-    }));
-
-    // Merge: existing + new (avoid duplicate realms by realm name, peers by URI)
+    // Merge
     const mergedRealms = [...existingRealms];
     newRealms.forEach(nr => {
-      const idx = mergedRealms.findIndex(r => r.realm === nr.realm);
-      if (idx >= 0) mergedRealms[idx] = nr; // replace existing
-      else mergedRealms.push(nr);
+      const idx = mergedRealms.findIndex(r => r.realm === nr.realm && r.appGrp === nr.appGrp);
+      if (idx >= 0) mergedRealms[idx] = nr; else mergedRealms.push(nr);
     });
-
     const mergedPeers = [...existingPeers];
     newPeers.forEach(np => {
-      const idx = mergedPeers.findIndex(p => p.peer === np.peer);
-      if (idx >= 0) mergedPeers[idx] = np;
-      else mergedPeers.push(np);
+      const idx = mergedPeers.findIndex(p => p.peer.toLowerCase() === np.peer.toLowerCase() && p.appGrp === np.appGrp);
+      if (idx >= 0) mergedPeers[idx] = np; else mergedPeers.push(np);
     });
 
     setRealmsJson(JSON.stringify(mergedRealms, null, 2));
@@ -153,148 +133,70 @@ export function SdpPage() {
   }
 
   async function handleDeploy() {
-    if (!realmsJson.trim() && !peersJson.trim()) {
-      setPopup({ type: 'error', message: 'Generate JSON first' });
-      return;
-    }
+    if (!realmsJson.trim() && !peersJson.trim()) { setPopup({ type: 'error', message: 'Generate JSON first' }); return; }
     setLoading(true);
     try {
-      let realmCount = 0;
-      let peerCount = 0;
       let lastJobId: string | undefined;
-
-      // Deploy realms
-      if (realmsJson.trim()) {
-        const realms = JSON.parse(realmsJson);
-        realmCount = realms.length;
-        if (realmCount > 0) {
-          const result = await updateSdpRealms(realms);
-          lastJobId = result.job?.id;
-          if (result.job?.status === 'failed') {
-            setPopup({ type: 'error', message: 'Realms deployment failed: ' + (result.job?.stderr || ''), jobId: lastJobId });
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-      // Deploy peers
-      if (peersJson.trim()) {
-        const peers = JSON.parse(peersJson);
-        peerCount = peers.length;
-        if (peerCount > 0) {
-          const result = await updateSdpPeers(peers);
-          lastJobId = result.job?.id;
-          if (result.job?.status === 'failed') {
-            setPopup({ type: 'error', message: 'Peers deployment failed: ' + (result.job?.stderr || ''), jobId: lastJobId });
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-      setPopup({ type: 'success', message: `Deployed ${realmCount} realm(s) and ${peerCount} peer(s)`, jobId: lastJobId });
-    } catch (e: any) {
-      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
-    }
+      if (realmsJson.trim()) { const r = await updateSdpRealms(JSON.parse(realmsJson)); lastJobId = r.job?.id; if (r.job?.status === 'failed') { setPopup({ type: 'error', message: 'Realms failed', jobId: lastJobId }); setLoading(false); return; } }
+      if (peersJson.trim()) { const r = await updateSdpPeers(JSON.parse(peersJson)); lastJobId = r.job?.id; if (r.job?.status === 'failed') { setPopup({ type: 'error', message: 'Peers failed', jobId: lastJobId }); setLoading(false); return; } }
+      setPopup({ type: 'success', message: 'Deployed successfully', jobId: lastJobId });
+    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
 
   async function handleDeleteAll() {
-    if (!confirm('Delete ALL SDP realms and peers? This removes all external rating routing.')) return;
+    if (!confirm('Delete ALL SDP realms and peers?')) return;
     setLoading(true);
-    try {
-      await updateSdpRealms([]);
-      await updateSdpPeers([]);
-      setRealmsJson('[]');
-      setPeersJson('[]');
-      setPopup({ type: 'success', message: 'All SDP realms and peers deleted' });
-    } catch (e: any) {
-      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
-    }
+    try { await updateSdpRealms([]); await updateSdpPeers([]); setPopup({ type: 'success', message: 'All deleted' }); } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
 
+  // Current Config
   async function handleListCurrent() {
-    setLoading(true);
-    setConfigModified(false);
+    setLoading(true); setConfigModified(false);
     try {
-      const rResult = await listSdpRealms();
-      const rOut = rResult.job?.stdout || '';
-      setRealmsOutput(rOut);
-      try { setCurrentRealms(JSON.parse(rOut)); } catch { setCurrentRealms([]); }
-
-      const pResult = await listSdpPeers();
-      const pOut = pResult.job?.stdout || '';
-      setPeersOutput(pOut);
-      try { setCurrentPeers(JSON.parse(pOut)); } catch { setCurrentPeers([]); }
-    } catch (e: any) {
-      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
-    }
+      const rr = await listSdpRealms(); try { setCurrentRealms(JSON.parse(rr.job?.stdout || '[]')); } catch { setCurrentRealms([]); }
+      const pr = await listSdpPeers(); try { setCurrentPeers(JSON.parse(pr.job?.stdout || '[]')); } catch { setCurrentPeers([]); }
+    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
 
-  function removeCurrentRealm(i: number) {
-    setCurrentRealms(currentRealms.filter((_, idx) => idx !== i));
-    setConfigModified(true);
-  }
-
-  function removeCurrentPeer(i: number) {
-    setCurrentPeers(currentPeers.filter((_, idx) => idx !== i));
-    setConfigModified(true);
-  }
+  function removeCurrentRealm(i: number) { setCurrentRealms(currentRealms.filter((_, idx) => idx !== i)); setConfigModified(true); }
+  function removeCurrentPeer(i: number) { setCurrentPeers(currentPeers.filter((_, idx) => idx !== i)); setConfigModified(true); }
 
   async function handleDeployCurrent() {
-    if (!confirm('Deploy modified realms and peers? This replaces the entire config.')) return;
+    if (!confirm('Deploy modified config?')) return;
     setLoading(true);
-    try {
-      await updateSdpRealms(currentRealms);
-      await updateSdpPeers(currentPeers);
-      setConfigModified(false);
-      setPopup({ type: 'success', message: `Deployed ${currentRealms.length} realm(s) and ${currentPeers.length} peer(s)` });
-    } catch (e: any) {
-      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
-    }
+    try { await updateSdpRealms(currentRealms); await updateSdpPeers(currentPeers); setConfigModified(false); setPopup({ type: 'success', message: 'Deployed' }); } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
 
+  const allAppGroups = [...new Set([...currentRealms.map(r => r.appGrp), ...currentPeers.map(p => p.appGrp)])];
+  const filteredRealms = filterAppGrp ? currentRealms.filter(r => r.appGrp === filterAppGrp) : currentRealms;
+  const filteredPeers = filterAppGrp ? currentPeers.filter(p => p.appGrp === filterAppGrp) : currentPeers;
+  function findPeer(uri: string, grp: string) { return currentPeers.find(p => p.peer.toLowerCase() === uri.toLowerCase() && p.appGrp === grp); }
+
   async function handleCheckStatus() {
-    setLoading(true);
-    setStatusOutput('');
+    setLoading(true); setStatusOutput('');
     try {
-      const result = await checkSdpPeerStatus({ port: statusPort, transport: statusTransport });
-      const job = result.job;
-      if (job?.status === 'failed') {
-        setPopup({ type: 'error', message: 'Failed to check peer status', jobId: job.id });
-        setStatusOutput(job.stderr || 'Check failed');
-      } else {
-        setStatusOutput(job?.stdout || 'No active sessions found');
-      }
-    } catch (e: any) {
-      setPopup({ type: 'error', message: typeof e?.message === 'string' ? e.message : String(e) });
-    }
+      const r = await checkSdpPeerStatus({ port: statusPort, transport: statusTransport });
+      if (r.job?.status === 'failed') { setPopup({ type: 'error', message: 'Failed', jobId: r.job.id }); setStatusOutput(r.job.stderr || ''); }
+      else setStatusOutput(r.job?.stdout || 'No sessions');
+    } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
     setLoading(false);
   }
 
   return (
     <div>
-      <div className="page-header">
-        <h1>SDP Integration</h1>
-      </div>
+      <div className="page-header"><h1>SDP Integration</h1></div>
 
       {popup && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#1a1a2e', border: `1px solid ${popup.type === 'success' ? '#66bb6a' : '#ef5350'}`, borderRadius: 8, padding: 24, minWidth: 320, maxWidth: 480 }}>
-            <h3 style={{ color: popup.type === 'success' ? '#66bb6a' : '#ef5350', marginBottom: 12 }}>
-              {popup.type === 'success' ? '✓ Success' : '✗ Failed'}
-            </h3>
+            <h3 style={{ color: popup.type === 'success' ? '#66bb6a' : '#ef5350', marginBottom: 12 }}>{popup.type === 'success' ? '✓ Success' : '✗ Failed'}</h3>
             <p style={{ color: '#e0e0e0', marginBottom: 16 }}>{popup.message}</p>
             <div style={{ display: 'flex', gap: 8 }}>
-              {popup.jobId && (
-                <button className="btn btn-primary" onClick={() => { setPopup(null); navigate(`/jobs?view=${popup.jobId}`); }}>
-                  View Execution Log
-                </button>
-              )}
+              {popup.jobId && <button className="btn btn-primary" onClick={() => { setPopup(null); navigate(`/jobs?view=${popup.jobId}`); }}>View Log</button>}
               <button className="btn btn-secondary" onClick={() => setPopup(null)}>Close</button>
             </div>
           </div>
@@ -310,223 +212,141 @@ export function SdpPage() {
       {/* Integrate Tab */}
       {tab === 'integrate' && (
         <div>
-          {/* Common Settings */}
           <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-            <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Common Settings (applies to all SDPs)</label>
+            <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Common Settings</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>App Group</label>
-                <input value={appGrp} onChange={e => setAppGrp(e.target.value)} />
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Transport</label>
-                <select value={transport} onChange={e => setTransport(e.target.value)}>
-                  <option value="sctp">SCTP</option>
-                  <option value="tcp">TCP</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Port</label>
-                <input value={port} onChange={e => setPort(e.target.value)} style={{ width: '100%' }} />
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Strategy</label>
-                <select value={strategy} onChange={e => setStrategy(e.target.value)}>
-                  <option value="round-robin">round-robin</option>
-                  <option value="failover">failover</option>
-                  <option value="failover-failback">failover-failback</option>
-                </select>
-              </div>
+              <div className="form-group" style={{ margin: 0 }}><label>App Groups (comma-sep for multiple)</label><input value={appGrps} onChange={e => setAppGrps(e.target.value)} placeholder="cha1, cha2" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Transport</label><select value={transport} onChange={e => setTransport(e.target.value)}><option value="sctp">SCTP</option><option value="tcp">TCP</option></select></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Port</label><input value={port} onChange={e => setPort(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Strategy</label><select value={strategy} onChange={e => setStrategy(e.target.value)}><option value="round-robin">round-robin</option><option value="failover">failover</option><option value="failover-failback">failover-failback</option></select></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginTop: 8 }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Applications</label>
-                <input value={apps} onChange={e => setApps(e.target.value)} />
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Initiate Connection</label>
-                <select value={String(initiate)} onChange={e => setInitiate(e.target.value === 'true')}>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Raise Alarm</label>
-                <select value={String(raiseAlarm)} onChange={e => setRaiseAlarm(e.target.value === 'true')}>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
+              <div className="form-group" style={{ margin: 0 }}><label>Applications</label><input value={apps} onChange={e => setApps(e.target.value)} /></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Initiate Connection</label><select value={String(initiate)} onChange={e => setInitiate(e.target.value === 'true')}><option value="true">Yes</option><option value="false">No</option></select></div>
+              <div className="form-group" style={{ margin: 0 }}><label>Raise Alarm</label><select value={String(raiseAlarm)} onChange={e => setRaiseAlarm(e.target.value === 'true')}><option value="true">Yes</option><option value="false">No</option></select></div>
             </div>
           </div>
 
-          {/* Input Mode Toggle */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button className={`btn ${inputMode === 'form' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('form')}>Row-by-Row</button>
-            <button className={`btn ${inputMode === 'bulk' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 11 }} onClick={() => setInputMode('bulk')}>Bulk Paste</button>
-          </div>
-
-          {/* Row-by-Row Input */}
-          {inputMode === 'form' && (
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+          {/* SDP Entries */}
+          {entries.map((entry, ei) => (
+            <div key={ei} style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>SDP Entries ({entries.length})</label>
-                <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={addEntry}>+ Add Row</button>
+                <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>SDP #{ei + 1}</label>
+                {entries.length > 1 && <button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => removeEntry(ei)}>Remove SDP</button>}
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ color: '#90a4ae', fontSize: 11 }}>
-                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '25%' }}>SDP Realm (optional)</th>
-                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '25%' }}>SDP IDs (comma-sep)</th>
-                    <th style={{ textAlign: 'left', padding: '4px 4px', width: '40%' }}>Peer Hosts (comma-sep) *</th>
-                    <th style={{ width: '10%' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry, i) => (
-                    <tr key={i}>
-                      <td style={{ padding: '2px 4px' }}>
-                        <input value={entry.realm} onChange={e => updateEntry(i, 'realm', e.target.value)} placeholder="sdp01.realm.com" style={{ width: '100%', fontSize: 12 }} />
-                      </td>
-                      <td style={{ padding: '2px 4px' }}>
-                        <input value={entry.sdpIds} onChange={e => updateEntry(i, 'sdpIds', e.target.value)} placeholder="sdp01.cs., 10.x.x.x" style={{ width: '100%', fontSize: 12 }} />
-                      </td>
-                      <td style={{ padding: '2px 4px' }}>
-                        <input value={entry.peerHosts} onChange={e => updateEntry(i, 'peerHosts', e.target.value)} placeholder="host1, host2, 10.x.x.x" style={{ width: '100%', fontSize: 12 }} />
-                      </td>
-                      <td style={{ padding: '2px 4px', textAlign: 'center' }}>
-                        {entries.length > 1 && (
-                          <button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeEntry(i)}>✕</button>
-                        )}
-                      </td>
-                    </tr>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div className="form-group" style={{ margin: 0 }}><label>Realm *</label><input value={entry.realm} onChange={e => updateEntryField(ei, 'realm', e.target.value)} placeholder="sdp01.realm.com" /></div>
+                <div className="form-group" style={{ margin: 0 }}><label>SDP IDs (comma-sep)</label><input value={entry.sdpIds} onChange={e => updateEntryField(ei, 'sdpIds', e.target.value)} placeholder="sdp01.cs." /></div>
+              </div>
+
+              {/* Indexes */}
+              {entry.indexes.map((idx, ii) => (
+                <div key={ii} style={{ padding: 8, border: '1px dashed #1a4080', borderRadius: 4, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ color: '#90a4ae', fontSize: 11, fontWeight: 600 }}>Index {idx.index} {idx.index === 1 ? '(Primary)' : '(Failover)'}</label>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => addPeer(ei, ii)}>+ Peer</button>
+                      {entry.indexes.length > 1 && <button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeIndex(ei, ii)}>Remove Idx</button>}
+                    </div>
+                  </div>
+                  {idx.peers.map((p, pi) => (
+                    <div key={pi} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr auto', gap: 6, marginBottom: 4 }}>
+                      <input value={p.host} onChange={e => updatePeer(ei, ii, pi, 'host', e.target.value)} placeholder="peer-host.domain.com" style={{ fontSize: 11 }} />
+                      <input value={p.connectAddresses} onChange={e => updatePeer(ei, ii, pi, 'connectAddresses', e.target.value)} placeholder="10.x.x.1, 10.x.x.2 (connect IPs)" style={{ fontSize: 11 }} />
+                      {idx.peers.length > 1 && <button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removePeer(ei, ii, pi)}>✕</button>}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              ))}
+              <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => addIndex(ei)}>+ Add Index (Failover)</button>
             </div>
-          )}
+          ))}
 
-          {/* Bulk Paste Input */}
-          {inputMode === 'bulk' && (
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Bulk Paste (one SDP per line)</label>
-              <p style={{ color: '#90a4ae', fontSize: 11, margin: '4px 0 8px' }}>
-                Format: <code style={{ color: '#4fc3f7' }}>realm | sdp_ids | peer_hosts</code> — realm is optional for peer-only
-              </p>
-              <textarea
-                value={bulkText}
-                onChange={e => setBulkText(e.target.value)}
-                rows={10}
-                style={{ width: '100%', background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 12 }}
-                placeholder={`sdp01.realm.com | sdp01.cs., 10.216.230.37 | peer1.com, peer2.com\nsdp02.realm.com | sdp02.cs. | peer3.com, peer4.com\n| | 10.1.1.5, 10.1.1.6`}
-              />
-              <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 4 }}>
-                {parseBulkText().length} entry(s) detected
-              </p>
-            </div>
-          )}
-
-          {/* Actions */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button className="btn btn-secondary" onClick={generateJson} disabled={loading}>
-              {loading ? 'Fetching existing...' : 'Generate JSON (merges with existing)'}
-            </button>
-            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading || (!realmsJson.trim() && !peersJson.trim())}>
-              {loading ? 'Deploying...' : 'Deploy All'}
-            </button>
-            <button className="btn btn-danger" onClick={handleDeleteAll} disabled={loading}>
-              Delete All SDPs
-            </button>
+            <button className="btn btn-secondary" onClick={addEntry}>+ Add SDP</button>
+            <button className="btn btn-secondary" onClick={generateJson} disabled={loading}>{loading ? 'Fetching...' : 'Generate JSON (merge)'}</button>
+            <button className="btn btn-primary" onClick={handleDeploy} disabled={loading || (!realmsJson && !peersJson)}>Deploy All</button>
+            <button className="btn btn-danger" onClick={handleDeleteAll} disabled={loading}>Delete All</button>
           </div>
 
-          {/* Generated Realms JSON */}
-          {realmsJson && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12 }}>Realms JSON (sent to <code>beamctl external-rating update-realms</code>):</label>
-              <textarea
-                value={realmsJson}
-                onChange={e => setRealmsJson(e.target.value)}
-                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
-              />
-            </div>
-          )}
-
-          {/* Generated Peers JSON */}
-          {peersJson && (
-            <div>
-              <label style={{ color: '#4fc3f7', fontSize: 12 }}>Peers JSON (sent to <code>beamctl external-rating update-peers</code>):</label>
-              <textarea
-                value={peersJson}
-                onChange={e => setPeersJson(e.target.value)}
-                style={{ width: '100%', minHeight: 140, maxHeight: 250, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }}
-              />
-            </div>
-          )}
+          {realmsJson && (<div style={{ marginBottom: 12 }}><label style={{ color: '#4fc3f7', fontSize: 12 }}>Realms JSON:</label><textarea value={realmsJson} onChange={e => setRealmsJson(e.target.value)} style={{ width: '100%', minHeight: 140, maxHeight: 300, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }} /></div>)}
+          {peersJson && (<div><label style={{ color: '#4fc3f7', fontSize: 12 }}>Peers JSON:</label><textarea value={peersJson} onChange={e => setPeersJson(e.target.value)} style={{ width: '100%', minHeight: 140, maxHeight: 300, background: '#0d1b2a', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: 4, padding: 10, fontFamily: 'monospace', fontSize: 11 }} /></div>)}
         </div>
       )}
 
       {/* Current Config Tab */}
       {tab === 'current' && (
         <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button className="btn btn-secondary" onClick={handleListCurrent} disabled={loading}>
-              {loading ? 'Loading...' : 'Refresh'}
-            </button>
-            {configModified && (
-              <button className="btn btn-primary" onClick={handleDeployCurrent} disabled={loading}>
-                Deploy Changes
-              </button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
+            <button className="btn btn-secondary" onClick={handleListCurrent} disabled={loading}>{loading ? 'Loading...' : 'Refresh'}</button>
+            {configModified && <button className="btn btn-primary" onClick={handleDeployCurrent} disabled={loading}>Deploy Changes</button>}
+            {allAppGroups.length > 1 && (
+              <div className="form-group" style={{ margin: 0 }}><label style={{ fontSize: 10 }}>Filter</label>
+                <select value={filterAppGrp} onChange={e => setFilterAppGrp(e.target.value)} style={{ fontSize: 11 }}>
+                  <option value="">All ({currentRealms.length})</option>
+                  {allAppGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
             )}
           </div>
-          {configModified && (
-            <div className="alert alert-error" style={{ marginBottom: 12 }}>
-              ⚠ Config modified. Click "Deploy Changes" to apply removals.
+          {configModified && <div className="alert alert-error" style={{ marginBottom: 12 }}>⚠ Modified. Deploy to apply.</div>}
+
+          {filteredRealms.length > 0 ? (
+            <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+              <table className="data-table">
+                <thead><tr><th>Realm</th><th>App Grp</th><th>SDP IDs</th><th>Strategy</th><th>Idx 1 Peers</th><th>Idx 2 Peers</th><th>Connect IPs</th><th></th></tr></thead>
+                <tbody>
+                  {filteredRealms.map((r, i) => {
+                    const idx1 = (r.addresses || []).find((a: any) => a.index === 1);
+                    const idx2 = (r.addresses || []).find((a: any) => a.index === 2);
+                    const stripUri = (u: string) => u.replace(/aaa:\/\//, '').replace(/;transport=.*/, '');
+                    const idx1Peers = (idx1?.peerAddresses || []).map(stripUri);
+                    const idx2Peers = (idx2?.peerAddresses || []).map(stripUri);
+                    const connectIps = (idx1?.peerAddresses || []).map((uri: string) => {
+                      const p = findPeer(uri, r.appGrp);
+                      return p?.connectAddresses?.join(', ') || '';
+                    }).filter(Boolean);
+                    return (
+                      <tr key={i}>
+                        <td style={{ fontSize: 11 }}>{r.realm}</td>
+                        <td>{r.appGrp}</td>
+                        <td style={{ fontSize: 10 }}>{(r.sdp_id || []).join(', ')}</td>
+                        <td style={{ fontSize: 10 }}>{r.strategy}</td>
+                        <td style={{ fontSize: 10 }}>{idx1Peers.join(', ')}</td>
+                        <td style={{ fontSize: 10 }}>{idx2Peers.length ? idx2Peers.join(', ') : '-'}</td>
+                        <td style={{ fontSize: 10 }}>{connectIps.length ? connectIps.join(' | ') : '-'}</td>
+                        <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentRealm(currentRealms.indexOf(r))}>✕</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          ) : (
+            <div className="console" style={{ marginBottom: 12 }}>Click Refresh</div>
           )}
 
-          <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Realms ({currentRealms.length})</label>
-          {currentRealms.length > 0 ? (
-            <table className="data-table" style={{ marginTop: 4, marginBottom: 16 }}>
-              <thead><tr><th>Realm</th><th>App Group</th><th>SDP IDs</th><th>Strategy</th><th>Addresses</th><th></th></tr></thead>
-              <tbody>
-                {currentRealms.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.realm}</td>
-                    <td>{r.appGrp}</td>
-                    <td style={{ fontSize: 11 }}>{(r.sdp_id || []).join(', ')}</td>
-                    <td>{r.strategy}</td>
-                    <td style={{ fontSize: 11 }}>{(r.addresses || []).flatMap((a: any) => a.peerAddresses || []).join(', ')}</td>
-                    <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentRealm(i)}>✕</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 40, marginBottom: 12 }}>
-              {realmsOutput || 'Click Refresh'}
-            </div>
-          )}
-
-          <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Peers ({currentPeers.length})</label>
-          {currentPeers.length > 0 ? (
-            <table className="data-table" style={{ marginTop: 4 }}>
-              <thead><tr><th>Peer URI</th><th>App Group</th><th>Initiate</th><th>Alarm</th><th></th></tr></thead>
-              <tbody>
-                {currentPeers.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ fontSize: 11 }}>{p.peer}</td>
-                    <td>{p.appGrp}</td>
-                    <td>{p.initiateConnection ? 'Yes' : 'No'}</td>
-                    <td>{p.raiseAlarm ? 'Yes' : 'No'}</td>
-                    <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentPeer(i)}>✕</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="console" style={{ whiteSpace: 'pre-wrap', minHeight: 40 }}>
-              {peersOutput || 'Click Refresh'}
-            </div>
+          {filteredPeers.length > 0 && (
+            <>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Peers ({filteredPeers.length})</label>
+              <div style={{ overflowX: 'auto', marginTop: 4 }}>
+                <table className="data-table">
+                  <thead><tr><th>Peer</th><th>App Grp</th><th>Initiate</th><th>Alarm</th><th>Connect Addresses</th><th></th></tr></thead>
+                  <tbody>
+                    {filteredPeers.map((p, i) => (
+                      <tr key={i}>
+                        <td style={{ fontSize: 10 }}>{p.peer.replace(/aaa:\/\//, '').replace(/;transport=.*/, '')}</td>
+                        <td>{p.appGrp}</td>
+                        <td>{p.initiateConnection ? 'Y' : 'N'}</td>
+                        <td>{p.raiseAlarm ? 'Y' : 'N'}</td>
+                        <td style={{ fontSize: 10 }}>{(p.connectAddresses || []).join(', ') || '-'}</td>
+                        <td><button className="btn btn-danger" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => removeCurrentPeer(currentPeers.indexOf(p))}>✕</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -534,34 +354,12 @@ export function SdpPage() {
       {/* Link Status Tab */}
       {tab === 'status' && (
         <div>
-          <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 12 }}>
-            Check Diameter sessions on the CHA DLB pod to verify SDP connectivity.
-          </p>
           <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label>Transport</label>
-              <select value={statusTransport} onChange={e => setStatusTransport(e.target.value)}>
-                <option value="sctp">SCTP</option>
-                <option value="tcp">TCP</option>
-              </select>
-            </div>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label>Port</label>
-              <input value={statusPort} onChange={e => setStatusPort(e.target.value)} style={{ width: 80 }} />
-            </div>
-            <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading}>
-              {loading ? 'Checking...' : 'Check Status'}
-            </button>
+            <div className="form-group" style={{ margin: 0 }}><label>Transport</label><select value={statusTransport} onChange={e => setStatusTransport(e.target.value)}><option value="sctp">SCTP</option><option value="tcp">TCP</option></select></div>
+            <div className="form-group" style={{ margin: 0 }}><label>Port</label><input value={statusPort} onChange={e => setStatusPort(e.target.value)} style={{ width: 80 }} /></div>
+            <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading}>{loading ? 'Checking...' : 'Check Status'}</button>
           </div>
-          {statusOutput && (
-            <>
-              <label style={{ color: '#90a4ae', fontSize: 12 }}>Diameter Sessions:</label>
-              <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>
-              <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 8 }}>
-                ESTAB = healthy. If empty, check routing/firewall between CAF and SDP.
-              </p>
-            </>
-          )}
+          {statusOutput && <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>}
         </div>
       )}
     </div>
