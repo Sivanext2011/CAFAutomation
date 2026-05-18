@@ -34,8 +34,6 @@ export function SdpPage() {
 
   // Status
   const [statusOutput, setStatusOutput] = useState('');
-  const [statusPort, setStatusPort] = useState('3868');
-  const [statusTransport, setStatusTransport] = useState('sctp');
 
   // Entry management
   function addEntry() { setEntries([...entries, { realm: '', sdpIds: '', indexes: [{ index: 1, peers: [{ host: '', connectAddresses: '' }] }] }]); }
@@ -179,7 +177,7 @@ export function SdpPage() {
   async function handleCheckStatus() {
     setLoading(true); setStatusOutput('');
     try {
-      const r = await checkSdpPeerStatus({ port: statusPort, transport: statusTransport });
+      const r = await checkSdpPeerStatus({});
       if (r.job?.status === 'failed') { setPopup({ type: 'error', message: 'Failed', jobId: r.job.id }); setStatusOutput(r.job.stderr || ''); }
       else setStatusOutput(r.job?.stdout || 'No sessions');
     } catch (e: any) { setPopup({ type: 'error', message: e.message }); }
@@ -354,12 +352,9 @@ export function SdpPage() {
       {/* Link Status Tab */}
       {tab === 'status' && (
         <div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ margin: 0 }}><label>Transport</label><select value={statusTransport} onChange={e => setStatusTransport(e.target.value)}><option value="sctp">SCTP</option><option value="tcp">TCP</option></select></div>
-            <div className="form-group" style={{ margin: 0 }}><label>Port</label><input value={statusPort} onChange={e => setStatusPort(e.target.value)} style={{ width: 80 }} /></div>
-            <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading}>{loading ? 'Checking...' : 'Check Status'}</button>
-          </div>
-          {statusOutput && <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>}
+          <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 12 }}>Runs: <code>kubectl -n &lt;namespace&gt; exec -it eric-bss-cha-diameter-lb-0 -- client peerlist</code></p>
+          <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading}>{loading ? 'Checking...' : 'Check Peer Status'}</button>
+          {statusOutput && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{statusOutput}</div>}
         </div>
       )}
     </div>
