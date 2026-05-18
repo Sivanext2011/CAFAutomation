@@ -352,9 +352,64 @@ export function SdpPage() {
       {/* Link Status Tab */}
       {tab === 'status' && (
         <div>
-          <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 12 }}>Runs: <code>kubectl -n &lt;namespace&gt; exec -it eric-bss-cha-diameter-lb-0 -- client peerlist</code></p>
-          <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading}>{loading ? 'Checking...' : 'Check Peer Status'}</button>
-          {statusOutput && <div className="console" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{statusOutput}</div>}
+          <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 12 }}>Runs: <code>kubectl exec -it eric-bss-cha-diameter-lb-0 -- client peerlist</code></p>
+          <button className="btn btn-primary" onClick={handleCheckStatus} disabled={loading} style={{ marginBottom: 12 }}>{loading ? 'Checking...' : 'Check Peer Status'}</button>
+          {statusOutput && (() => {
+            // Parse peerlist output into table
+            const peers: any[] = [];
+            const blocks = statusOutput.split(/\n\{/).slice(1);
+            blocks.forEach(block => {
+              const entry: any = {};
+              const lines = ('{' + block).split('\n');
+              lines.forEach(line => {
+                const m = line.match(/^\s+(\w[\w\s]*):\s*(.*)$/);
+                if (m) {
+                  const key = m[1].trim();
+                  const val = m[2].trim().replace(/,?$/, '');
+                  if (key === 'address') entry.address = val;
+                  else if (key === 'realm') entry.realm = val;
+                  else if (key === 'status') entry.status = val;
+                  else if (key === 'use TLS') entry.tls = val;
+                  else if (key === 'IP Address') entry.ipAddress = val;
+                  else if (key === 'Connect Addresses') entry.connectAddresses = val;
+                  else if (key === 'application') entry.application = val;
+                }
+              });
+              if (entry.address) peers.push(entry);
+            });
+
+            if (peers.length === 0) return <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>;
+
+            const statusColor = (s: string) => {
+              if (s === 'CONNECTED') return '#66bb6a';
+              if (s === 'DISCONNECTED') return '#ef5350';
+              return '#ff9800';
+            };
+
+            return (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead><tr><th>Address</th><th>Realm</th><th>Status</th><th>TLS</th><th>Connect Addresses</th></tr></thead>
+                  <tbody>
+                    {peers.map((p, i) => (
+                      <tr key={i}>
+                        <td style={{ fontSize: 11 }}>{p.address}</td>
+                        <td>{p.realm || '-'}</td>
+                        <td><span style={{ color: statusColor(p.status), fontWeight: 600 }}>{p.status}</span></td>
+                        <td>{p.tls || '-'}</td>
+                        <td style={{ fontSize: 11 }}>{p.connectAddresses || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ color: '#90a4ae', fontSize: 11, marginTop: 8 }}>
+                  <span style={{ color: '#66bb6a' }}>● CONNECTED</span>{' '}
+                  <span style={{ color: '#ef5350' }}>● DISCONNECTED</span>{' '}
+                  <span style={{ color: '#ff9800' }}>● DEFINED</span>
+                </p>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
