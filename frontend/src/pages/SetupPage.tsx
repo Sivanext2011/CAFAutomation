@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getSetupStatus, initializeSetup, login, redownloadAllClis } from '../api/client';
+import { getSetupStatus, initializeSetup, login, logout, redownloadAllClis } from '../api/client';
 
 export function SetupPage() {
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
 
-  // Setup fields
+  // Cluster setup
   const [oamDomain, setOamDomain] = useState('');
   const [beamCliFqdn, setBeamCliFqdn] = useState('');
   const [bamCliFqdn, setBamCliFqdn] = useState('');
@@ -16,27 +15,19 @@ export function SetupPage() {
   const [certmFqdn, setCertmFqdn] = useState('');
   const [namespace, setNamespace] = useState('caf');
   const [kubeconfigContent, setKubeconfigContent] = useState('');
+  const [showSetup, setShowSetup] = useState(false);
+
+  // Login
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
-  // Re-login
-  const [reloginUser, setReloginUser] = useState('');
-  const [reloginPass, setReloginPass] = useState('');
-  const [reloginUrl, setReloginUrl] = useState('');
 
   useEffect(() => { loadStatus(); }, []);
 
   async function loadStatus() {
-    try {
-      const s = await getSetupStatus();
-      setStatus(s);
-      if (s.setup_complete) setReady(true);
-    } catch (e: any) {
-      setError(e.message);
-    }
+    try { const s = await getSetupStatus(); setStatus(s); } catch (e: any) { setError(e.message); }
   }
 
-  async function handleSetup(e: React.FormEvent) {
+  async function handleClusterSetup(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSuccess(''); setLoading(true);
     try {
@@ -48,199 +39,144 @@ export function SetupPage() {
         certm_fqdn: certmFqdn || undefined,
         namespace: namespace || undefined,
         kubeconfig_content: kubeconfigContent || undefined,
-        username: username || undefined,
-        password: password || undefined,
       });
-      setSuccess('Setup completed. CLIs downloaded, configured, and logged in (beamctl + bamctl).');
-      setReady(true);
+      setSuccess('Cluster setup complete. CLIs downloaded to bin/.');
+      setShowSetup(false);
       loadStatus();
-    } catch (e: any) {
-      setError(e.message);
-    }
+    } catch (e: any) { setError(e.message); }
     setLoading(false);
   }
 
-  async function handleRelogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSuccess(''); setLoading(true);
     try {
-      const result = await login({
-        username: reloginUser,
-        password: reloginPass,
-        iam_url: reloginUrl || undefined,
-      });
+      const result = await login({ username, password });
       if (result.status === 'success') {
-        setSuccess('Re-login successful (beamctl + bamctl).');
+        setSuccess(`Logged in as ${username}. Session active.`);
+        setPassword('');  // Clear password from memory
         loadStatus();
       } else {
-        setError('Login failed: ' + (result.job?.stderr || 'Unknown error'));
+        setError('Login failed: ' + (result.error || result.job?.stderr || 'Unknown'));
       }
-    } catch (e: any) {
-      setError(e.message);
-    }
+    } catch (e: any) { setError(e.message); }
     setLoading(false);
+  }
+
+  async function handleLogout() {
+    try { await logout(); setSuccess('Logged out.'); loadStatus(); } catch (e: any) { setError(e.message); }
   }
 
   async function handleRedownload() {
     setError(''); setSuccess(''); setLoading(true);
     try {
-      const result = await redownloadAllClis();
-      if (result.status === 'success') {
-        setSuccess('beamctl + bamctl re-downloaded to bin/');
-      } else {
-        setError('Download failed');
-      }
-    } catch (e: any) {
-      setError(e.message);
-    }
+      const r = await redownloadAllClis();
+      if (r.status === 'success') setSuccess('CLIs re-downloaded.');
+      else setError('Download failed');
+    } catch (e: any) { setError(e.message); }
     setLoading(false);
   }
+
+  const setupDone = status?.setup_complete;
+  const loggedIn = status?.logged_in;
 
   return (
     <div>
       <div className="page-header">
         <h1>System Setup</h1>
-        <span className={`badge ${ready ? 'badge-success' : 'badge-pending'}`}>
-          {ready ? '✓ Ready' : 'Not Configured'}
-        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span className={`badge ${setupDone ? 'badge-success' : 'badge-pending'}`}>Cluster: {setupDone ? '✓' : '✗'}</span>
+          <span className={`badge ${loggedIn ? 'badge-success' : 'badge-pending'}`}>Session: {loggedIn ? status.username : 'Not logged in'}</span>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      {/* Setup Form */}
-      {!ready && (
-        <div className="form-panel" style={{ maxWidth: 600 }}>
-          <h3 style={{ marginBottom: 4, color: '#4fc3f7' }}>Initial Configuration</h3>
-          <p style={{ color: '#90a4ae', fontSize: 12, marginBottom: 16 }}>
-            Configure cluster, download CLIs to ./bin/, and login both beamctl &amp; bamctl.
+      {/* Login Section - Always visible when setup is done */}
+      {setupDone && !loggedIn && (
+        <div className="form-panel" style={{ maxWidth: 400, marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 4, color: '#4fc3f7' }}>Login</h3>
+          <p style={{ color: '#90a4ae', fontSize: 11, marginBottom: 12 }}>
+            Authenticate to beamctl &amp; bamctl. Credentials are NOT stored — used only for this session.
           </p>
-          <form onSubmit={handleSetup}>
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Cluster Configuration</label>
-              <div className="form-group" style={{ marginTop: 8 }}>
-                <label>OAM Site Domain Name *</label>
-                <input value={oamDomain} onChange={e => setOamDomain(e.target.value)} placeholder="bam-cluster01.operator.com" required />
-              </div>
-            </div>
-
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Login Credentials (beamctl &amp; bamctl) *</label>
-              <p style={{ color: '#90a4ae', fontSize: 11, marginBottom: 8 }}>
-                Used to authenticate both CLIs. Certificate trust prompts are auto-accepted.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Username *</label>
-                  <input value={username} onChange={e => setUsername(e.target.value)} placeholder="admin" required />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Password *</label>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>CLI Binary Download (saved to ./bin/)</label>
-              <p style={{ color: '#90a4ae', fontSize: 11, marginBottom: 8 }}>
-                Leave FQDNs empty to use defaults.
-              </p>
-              <div className="form-group" style={{ marginTop: 8 }}>
-                <label>BEAM CLI FQDN (default: eric-bss-beam-cli.&lt;oamDomain&gt;)</label>
-                <input value={beamCliFqdn} onChange={e => setBeamCliFqdn(e.target.value)} placeholder={oamDomain ? `eric-bss-beam-cli.${oamDomain}` : 'eric-bss-beam-cli.<oamDomain>'} />
-              </div>
-              <div className="form-group">
-                <label>BAM CLI FQDN (default: eric-bss-bam-cli.&lt;oamDomain&gt;)</label>
-                <input value={bamCliFqdn} onChange={e => setBamCliFqdn(e.target.value)} placeholder={oamDomain ? `eric-bss-bam-cli.${oamDomain}` : 'eric-bss-bam-cli.<oamDomain>'} />
-              </div>
-            </div>
-
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Kubernetes Configuration</label>
-              <div className="form-group" style={{ marginTop: 8 }}>
-                <label>CAF Namespace</label>
-                <input value={namespace} onChange={e => setNamespace(e.target.value)} placeholder="caf" />
-              </div>
-              <div className="form-group">
-                <label>Kubeconfig Content (paste here, saved to bin/kubeconfig)</label>
-                <textarea value={kubeconfigContent} onChange={e => setKubeconfigContent(e.target.value)} placeholder={"apiVersion: v1\nclusters:\n- cluster:\n    server: https://..."} rows={8} style={{ fontFamily: 'monospace', fontSize: 11 }} />
-              </div>
-            </div>
-
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Service FQDNs (optional overrides)</label>
-              <div className="form-group" style={{ marginTop: 8 }}>
-                <label>IAM FQDN (default: eric-sec-access-mgmt.&lt;oamDomain&gt;)</label>
-                <input value={iamFqdn} onChange={e => setIamFqdn(e.target.value)} placeholder={oamDomain ? `eric-sec-access-mgmt.${oamDomain}` : ''} />
-              </div>
-              <div className="form-group">
-                <label>CertM FQDN (default: eric-sec-certm.&lt;oamDomain&gt;)</label>
-                <input value={certmFqdn} onChange={e => setCertmFqdn(e.target.value)} placeholder={oamDomain ? `eric-sec-certm.${oamDomain}` : ''} />
-              </div>
-            </div>
-
-            <div className="form-actions">
-              <button className="btn btn-primary" disabled={loading}>
-                {loading ? 'Setting up...' : 'Download CLIs, Configure & Login'}
-              </button>
-            </div>
+          <form onSubmit={handleLogin}>
+            <div className="form-group"><label>Username *</label><input value={username} onChange={e => setUsername(e.target.value)} required /></div>
+            <div className="form-group"><label>Password *</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+            <button className="btn btn-primary" disabled={loading}>{loading ? 'Logging in...' : 'Login'}</button>
           </form>
         </div>
       )}
 
-      {/* Ready State */}
-      {ready && (
-        <>
-          <div className="card">
-            <h3 style={{ marginBottom: 12, color: '#8bc34a' }}>✓ System Ready</h3>
-            <table className="data-table">
-              <tbody>
-                <tr><td>OAM Domain</td><td>{status?.oam_site_domain_name}</td></tr>
-                <tr><td>BEAM CLI FQDN</td><td>{status?.beam_cli_fqdn}</td></tr>
-                <tr><td>BAM CLI FQDN</td><td>{status?.bam_cli_fqdn || 'Default'}</td></tr>
-                <tr><td>IAM FQDN</td><td>{status?.iam_fqdn}</td></tr>
-                <tr><td>CertM FQDN</td><td>{status?.certm_fqdn}</td></tr>
-                <tr><td>Namespace</td><td>{status?.namespace || 'caf'}</td></tr>
-                <tr><td>Bin Directory</td><td>./bin/ (beamctl, bamctl, kubeconfig, login.json)</td></tr>
-                <tr><td>Logged in as</td><td>{status?.logged_in_user || 'N/A'}</td></tr>
-              </tbody>
-            </table>
-          </div>
+      {/* Logged in state */}
+      {setupDone && loggedIn && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ color: '#8bc34a', marginBottom: 8 }}>✓ Ready</h3>
+          <p style={{ color: '#e0e0e0', marginBottom: 12 }}>Logged in as <strong>{status.username}</strong>. Your session is isolated — other users have their own sessions.</p>
+          <button className="btn btn-secondary" onClick={handleLogout}>Logout</button>
+        </div>
+      )}
 
-          <div className="card">
-            <h3 style={{ marginBottom: 12, color: '#4fc3f7' }}>Maintenance</h3>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-              <button className="btn btn-secondary" onClick={handleRedownload} disabled={loading}>
-                ↓ Re-download CLIs
-              </button>
-              <button className="btn btn-secondary" onClick={() => setReady(false)} disabled={loading}>
-                ⚙ Reconfigure
-              </button>
+      {/* Cluster Setup Section */}
+      {setupDone && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ color: '#4fc3f7', marginBottom: 8 }}>Cluster Configuration</h3>
+          <table className="data-table">
+            <tbody>
+              <tr><td>OAM Domain</td><td>{status?.oam_site_domain_name}</td></tr>
+              <tr><td>BEAM CLI</td><td>{status?.beam_cli_fqdn}</td></tr>
+              <tr><td>BAM CLI</td><td>{status?.bam_cli_fqdn}</td></tr>
+              <tr><td>IAM FQDN</td><td>{status?.iam_fqdn}</td></tr>
+              <tr><td>Namespace</td><td>{status?.namespace}</td></tr>
+              <tr><td>beamctl</td><td>{status?.beamctl_exists ? '✓ Downloaded' : '✗ Missing'}</td></tr>
+              <tr><td>bamctl</td><td>{status?.bamctl_exists ? '✓ Downloaded' : '✗ Missing'}</td></tr>
+              <tr><td>kubeconfig</td><td>{status?.kubeconfig_exists ? '✓ Present' : '✗ Missing'}</td></tr>
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button className="btn btn-secondary" onClick={handleRedownload} disabled={loading}>↓ Re-download CLIs</button>
+            <button className="btn btn-secondary" onClick={() => setShowSetup(true)}>⚙ Reconfigure</button>
+          </div>
+        </div>
+      )}
+
+      {/* Initial Setup / Reconfigure Form */}
+      {(!setupDone || showSetup) && (
+        <div className="form-panel" style={{ maxWidth: 600 }}>
+          <h3 style={{ marginBottom: 4, color: '#4fc3f7' }}>Cluster Setup {setupDone ? '(Reconfigure)' : ''}</h3>
+          <p style={{ color: '#90a4ae', fontSize: 11, marginBottom: 16 }}>
+            One-time setup: download CLI binaries and configure cluster FQDNs.
+          </p>
+          <form onSubmit={handleClusterSetup}>
+            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Cluster</label>
+              <div className="form-group" style={{ marginTop: 8 }}><label>OAM Site Domain Name *</label><input value={oamDomain} onChange={e => setOamDomain(e.target.value)} placeholder="bam-cluster01.operator.com" required /></div>
             </div>
 
-            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, maxWidth: 400 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>🔑 Re-login (beamctl + bamctl)</label>
-              <form onSubmit={handleRelogin} style={{ marginTop: 8 }}>
-                <div className="form-group">
-                  <label>Username *</label>
-                  <input value={reloginUser} onChange={e => setReloginUser(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label>Password *</label>
-                  <input type="password" value={reloginPass} onChange={e => setReloginPass(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label>IAM Token URL (optional)</label>
-                  <input value={reloginUrl} onChange={e => setReloginUrl(e.target.value)} placeholder={status?.iam_fqdn ? `https://${status.iam_fqdn}/auth/realms/...` : ''} />
-                </div>
-                <button className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Logging in...' : 'Re-login'}
-                </button>
-              </form>
+            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>CLI FQDNs (leave empty for defaults)</label>
+              <div className="form-group" style={{ marginTop: 8 }}><label>BEAM CLI FQDN</label><input value={beamCliFqdn} onChange={e => setBeamCliFqdn(e.target.value)} placeholder={oamDomain ? `eric-bss-beam-cli.${oamDomain}` : ''} /></div>
+              <div className="form-group"><label>BAM CLI FQDN</label><input value={bamCliFqdn} onChange={e => setBamCliFqdn(e.target.value)} placeholder={oamDomain ? `eric-bss-bam-cli.${oamDomain}` : ''} /></div>
             </div>
-          </div>
-        </>
+
+            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Kubernetes</label>
+              <div className="form-group" style={{ marginTop: 8 }}><label>Namespace</label><input value={namespace} onChange={e => setNamespace(e.target.value)} /></div>
+              <div className="form-group"><label>Kubeconfig (paste content)</label><textarea value={kubeconfigContent} onChange={e => setKubeconfigContent(e.target.value)} rows={6} style={{ fontFamily: 'monospace', fontSize: 11 }} placeholder="apiVersion: v1..." /></div>
+            </div>
+
+            <div style={{ padding: 12, border: '1px solid #0f3460', borderRadius: 4, marginBottom: 12 }}>
+              <label style={{ color: '#4fc3f7', fontSize: 12, fontWeight: 600 }}>Service FQDNs (optional)</label>
+              <div className="form-group" style={{ marginTop: 8 }}><label>IAM FQDN</label><input value={iamFqdn} onChange={e => setIamFqdn(e.target.value)} placeholder={oamDomain ? `eric-sec-access-mgmt.${oamDomain}` : ''} /></div>
+              <div className="form-group"><label>CertM FQDN</label><input value={certmFqdn} onChange={e => setCertmFqdn(e.target.value)} placeholder={oamDomain ? `eric-sec-certm.${oamDomain}` : ''} /></div>
+            </div>
+
+            <div className="form-actions">
+              <button className="btn btn-primary" disabled={loading}>{loading ? 'Setting up...' : 'Download CLIs & Configure'}</button>
+              {showSetup && <button type="button" className="btn btn-secondary" onClick={() => setShowSetup(false)}>Cancel</button>}
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

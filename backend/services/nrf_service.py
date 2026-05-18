@@ -14,10 +14,7 @@ from backend.validators import validate_address, validate_server_id, validate_ad
 from typing import Optional, Callable
 
 
-async def add_nrf_server(
-    request: AddNrfServerRequest,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def add_nrf_server(request, on_output=None, session_id=None) -> "Job":
     error = validate_address(request.address)
     if error:
         raise ValueError(error)
@@ -32,13 +29,11 @@ async def add_nrf_server(
         operation="add-nrf-server",
         input_payload=payload,
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def delete_nrf_server(
-    server_id: str,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def delete_nrf_server(server_id, on_output=None, session_id=None) -> "Job":
     error = validate_server_id(server_id)
     if error:
         raise ValueError(error)
@@ -49,13 +44,11 @@ async def delete_nrf_server(
         operation="delete-nrf-server",
         input_payload={"serverId": server_id},
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def get_nrf_server(
-    server_id: str,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def get_nrf_server(server_id, on_output=None, session_id=None) -> "Job":
     error = validate_server_id(server_id)
     if error:
         raise ValueError(error)
@@ -66,23 +59,20 @@ async def get_nrf_server(
         operation="get-nrf-server",
         input_payload={"serverId": server_id},
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def list_nrf_servers(
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def list_nrf_servers(on_output=None, session_id=None) -> "Job":
     return await execute_nrf_command(
         sub_command="list-nrf-servers",
         operation="list-nrf-servers",
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def add_nrf_oauth_server(
-    request: AddNrfOauthServerRequest,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def add_nrf_oauth_server(request, on_output=None, session_id=None) -> "Job":
     error = validate_address(request.address)
     if error:
         raise ValueError(error)
@@ -97,15 +87,11 @@ async def add_nrf_oauth_server(
         operation="add-nrf-oauth-server",
         input_payload=payload,
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-# --- Combined Deployment (Scenario-based) ---
-
-async def deploy_nrf_configuration(
-    request: NrfDeploymentRequest,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> dict:
+async def deploy_nrf_configuration(request, on_output=None, session_id=None) -> dict:
     """Deploy NRF + optional OAuth in one operation based on scenario."""
     results = {"scenario": request.get_scenario(), "steps": []}
 
@@ -122,6 +108,7 @@ async def deploy_nrf_configuration(
         operation="deploy-nrf-server",
         input_payload=nrf_payload,
         on_output=on_output,
+        session_id=session_id,
     )
     results["steps"].append({"operation": "add-nrf-server", "job": nrf_job.model_dump()})
 
@@ -138,16 +125,14 @@ async def deploy_nrf_configuration(
             operation="deploy-oauth-server",
             input_payload=oauth_payload,
             on_output=on_output,
+            session_id=session_id,
         )
         results["steps"].append({"operation": "add-nrf-oauth-server", "job": oauth_job.model_dump()})
 
     return results
 
 
-async def delete_nrf_oauth_server(
-    server_id: str,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def delete_nrf_oauth_server(server_id, on_output=None, session_id=None) -> "Job":
     error = validate_server_id(server_id)
     if error:
         raise ValueError(error)
@@ -158,13 +143,11 @@ async def delete_nrf_oauth_server(
         operation="delete-nrf-oauth-server",
         input_payload={"serverId": server_id},
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def get_nrf_oauth_server(
-    server_id: str,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def get_nrf_oauth_server(server_id, on_output=None, session_id=None) -> "Job":
     error = validate_server_id(server_id)
     if error:
         raise ValueError(error)
@@ -175,33 +158,29 @@ async def get_nrf_oauth_server(
         operation="get-nrf-oauth-server",
         input_payload={"serverId": server_id},
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def list_nrf_oauth_servers(
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def list_nrf_oauth_servers(on_output=None, session_id=None) -> "Job":
     return await execute_nrf_command(
         sub_command="list-nrf-oauth-servers",
         operation="list-nrf-oauth-servers",
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def list_registration_properties(
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def list_registration_properties(on_output=None, session_id=None) -> "Job":
     return await execute_nrf_command(
         sub_command="list-registration-properties",
         operation="list-registration-properties",
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def update_registration_properties(
-    request: UpdateRegistrationPropertiesRequest,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def update_registration_properties(request, on_output=None, session_id=None) -> "Job":
     payload = request.to_beamctl_json()
     return await execute_nrf_command(
         sub_command="update-registration-properties",
@@ -209,25 +188,20 @@ async def update_registration_properties(
         operation="update-registration-properties",
         input_payload=payload,
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-# --- NF Profile Config ---
-
-async def list_nf_profile_config(
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def list_nf_profile_config(on_output=None, session_id=None) -> "Job":
     return await execute_nf_profile_command(
         sub_command="list-nf-profile-config",
         operation="list-nf-profile-config",
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def update_nf_profile_config(
-    request: UpdateNfProfileConfigRequest,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def update_nf_profile_config(request, on_output=None, session_id=None) -> "Job":
     return await execute_nf_profile_command(
         sub_command="update-nf-profile-config",
         args=[request.app_group_name],
@@ -235,17 +209,16 @@ async def update_nf_profile_config(
         operation="update-nf-profile-config",
         input_payload={"appGroupName": request.app_group_name, "payload": request.payload},
         on_output=on_output,
+        session_id=session_id,
     )
 
 
-async def delete_nf_profile_config(
-    app_group_name: str,
-    on_output: Optional[Callable[[str], None]] = None,
-) -> Job:
+async def delete_nf_profile_config(app_group_name, on_output=None, session_id=None) -> "Job":
     return await execute_nf_profile_command(
         sub_command="delete-nf-profile-config",
         args=[app_group_name],
         operation="delete-nf-profile-config",
         input_payload={"appGroupName": app_group_name},
         on_output=on_output,
+        session_id=session_id,
     )

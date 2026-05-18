@@ -46,8 +46,6 @@ class SetupConfig(BaseModel):
     certm_fqdn: Optional[str] = None
     namespace: Optional[str] = None
     kubeconfig_content: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

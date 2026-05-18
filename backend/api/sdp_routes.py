@@ -6,39 +6,42 @@ from typing import Optional
 router = APIRouter(prefix="/api/sdp", tags=["sdp"])
 
 
-async def _run_external_rating(sub_command: str, stdin_json=None, operation: str = ""):
+def _sid(request: Request) -> str:
+    return getattr(request.state, "session_id", None)
+
+
+async def _run_external_rating(sub_command: str, stdin_json=None, operation: str = "", session_id=None):
     command_args = ["external-rating", sub_command]
     job = await execute_command(
         command_args=command_args,
         operation=operation or f"external-rating-{sub_command}",
         input_payload=stdin_json if isinstance(stdin_json, dict) else {"data": stdin_json},
         stdin_json=stdin_json,
+        session_id=session_id,
     )
     return {"status": job.status, "job": job.model_dump()}
 
 
 @router.get("/realms")
-async def list_realms():
-    return await _run_external_rating("list-realms", operation="sdp-list-realms")
+async def list_realms(request: Request):
+    return await _run_external_rating("list-realms", operation="sdp-list-realms", session_id=_sid(request))
 
 
 @router.post("/realms")
 async def update_realms(request: Request):
-    """Update external rating realms (replaces entire list)."""
     payload = await request.json()
-    return await _run_external_rating("update-realms", stdin_json=payload, operation="sdp-update-realms")
+    return await _run_external_rating("update-realms", stdin_json=payload, operation="sdp-update-realms", session_id=_sid(request))
 
 
 @router.get("/peers")
-async def list_peers():
-    return await _run_external_rating("list-peers", operation="sdp-list-peers")
+async def list_peers(request: Request):
+    return await _run_external_rating("list-peers", operation="sdp-list-peers", session_id=_sid(request))
 
 
 @router.post("/peers")
 async def update_peers(request: Request):
-    """Update external rating peers (replaces entire list)."""
     payload = await request.json()
-    return await _run_external_rating("update-peers", stdin_json=payload, operation="sdp-update-peers")
+    return await _run_external_rating("update-peers", stdin_json=payload, operation="sdp-update-peers", session_id=_sid(request))
 
 
 @router.post("/check-peer-status")

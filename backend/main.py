@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.setup_routes import router as setup_router
@@ -35,6 +35,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def session_middleware(request: Request, call_next):
+    """Extract session_id from cookie/header and attach to request state."""
+    session_id = request.cookies.get("session_id") or request.headers.get("x-session-id")
+    request.state.session_id = session_id
+    response = await call_next(request)
+    return response
 
 app.include_router(setup_router)
 app.include_router(nrf_router)

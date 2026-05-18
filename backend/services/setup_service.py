@@ -1,16 +1,17 @@
 from backend.models.schemas import SetupConfig, LoginRequest, Job
 from backend.executor import (
     execute_login, execute_bamctl_login, execute_config_set,
-    download_beamctl, download_bamctl,
-    save_kubeconfig, save_login_details, get_login_details,
+    download_beamctl, download_bamctl, save_kubeconfig,
     BEAMCTL_PATH, BAMCTL_PATH, KUBECONFIG_PATH,
 )
-from backend.storage import get_setup_config, save_setup_config, is_setup_complete
+from backend.storage import get_setup_config, save_setup_config
+from backend.services.session_service import create_session, get_session_info, list_active_sessions
 from backend.validators import validate_fqdn
+from pathlib import Path
 
 
-async def perform_initial_setup(config: SetupConfig) -> dict:
-    """Perform initial setup: download CLIs, configure FQDN, save kubeconfig, login both CLIs."""
+async def perform_cluster_setup(config: SetupConfig) -> dict:
+    """One-time cluster setup: download CLIs, save kubeconfig, configure FQDN."""
     error = validate_fqdn(config.oam_site_domain_name)
     if error:
         raise ValueError(error)
@@ -20,11 +21,10 @@ async def perform_initial_setup(config: SetupConfig) -> dict:
     beam_fqdn = config.beam_cli_fqdn or f"eric-bss-beam-cli.{config.oam_site_domain_name}"
     bam_fqdn = config.bam_cli_fqdn or f"eric-bss-bam-cli.{config.oam_site_domain_name}"
 
-    # Download beamctl binary to ./bin/
+    # Download binaries
     download_job = await download_beamctl(beam_fqdn)
     results["download_beamctl"] = download_job.model_dump()
 
-    # Download bamctl binary to ./bin/ (from BAM CLI server)
     bam_job = await download_bamctl(bam_fqdn)
     results["download_bamctl"] = bam_job.model_dump()
 
@@ -33,44 +33,22 @@ async def perform_initial_setup(config: SetupConfig) -> dict:
     if bam_job.status != "success":
         raise RuntimeError(f"Failed to download bamctl: {bam_job.stderr}")
 
-    # Save kubeconfig content to ./bin/kubeconfig
+    # Save kubeconfig
     if config.kubeconfig_content:
         save_kubeconfig(config.kubeconfig_content)
         results["kubeconfig"] = "saved to bin/kubeconfig"
 
-    # Configure FQDN
-    fqdn_job = await execute_config_set("fqdn", config.oam_site_domain_name)
+    # Configure FQDN (uses a temp session)
+    temp_session = create_session("setup")
+    fqdn_job = await execute_config_set("fqdn", config.oam_site_domain_name, session_id=temp_session)
     results["fqdn_config"] = fqdn_job.model_dump()
 
-    if fqdn_job.status != "success":
-        raise RuntimeError(f"Failed to configure FQDN: {fqdn_job.stderr}")
-
-    if config.beam_cli_fqdn:
-        cli_job = await execute_config_set("cli-server", config.beam_cli_fqdn)
-        results["cli_server_config"] = cli_job.model_dump()
-
-    # Login both CLIs if credentials provided
-    iam_fqdn = config.iam_fqdn or f"eric-sec-access-mgmt.{config.oam_site_domain_name}"
-    iam_url = f"https://{iam_fqdn}/auth/realms/master/protocol/openid-connect/token"
-
-    if config.username and config.password:
-        # Login beamctl
-        beam_login = await execute_login(config.username, config.password, iam_url)
-        results["login_beamctl"] = beam_login.model_dump()
-
-        # Login bamctl
-        bam_login = await execute_bamctl_login(config.username, config.password, iam_url)
-        results["login_bamctl"] = bam_login.model_dump()
-
-        # Save login details
-        save_login_details(config.username, iam_url)
-
-    # Save setup state
+    # Save setup state (no credentials)
     setup_state = {
         "oam_site_domain_name": config.oam_site_domain_name,
         "beam_cli_fqdn": beam_fqdn,
         "bam_cli_fqdn": bam_fqdn,
-        "iam_fqdn": iam_fqdn,
+        "iam_fqdn": config.iam_fqdn or f"eric-sec-access-mgmt.{config.oam_site_domain_name}",
         "certm_fqdn": config.certm_fqdn or f"eric-sec-certm.{config.oam_site_domain_name}",
         "namespace": config.namespace or "caf",
         "kubeconfig_path": KUBECONFIG_PATH,
@@ -84,71 +62,62 @@ async def perform_initial_setup(config: SetupConfig) -> dict:
     return results
 
 
-async def perform_login(request: LoginRequest) -> Job:
-    """Re-login to both beamctl and bamctl."""
+async def perform_login(request: LoginRequest) -> dict:
+    """Per-user login: creates a session, logs in both CLIs, returns session_id."""
     setup = get_setup_config()
     if not setup:
-        raise RuntimeError("Setup not complete. Run initial setup first.")
+        raise RuntimeError("Cluster setup not complete. Run setup first.")
 
     iam_fqdn = setup.get("iam_fqdn", "")
     iam_url = request.iam_url or f"https://{iam_fqdn}/auth/realms/master/protocol/openid-connect/token"
 
-    # Login beamctl
+    # Create session for this user
+    session_id = create_session(request.username)
+
+    # Login beamctl with this session
     beam_job = await execute_login(
         username=request.username,
         password=request.password,
         iam_url=iam_url,
+        session_id=session_id,
     )
 
-    # Login bamctl
-    await execute_bamctl_login(
+    # Login bamctl with this session
+    bam_job = await execute_bamctl_login(
         username=request.username,
         password=request.password,
         iam_url=iam_url,
+        session_id=session_id,
     )
 
-    # Save login details to bin dir
-    if beam_job.status == "success":
-        save_login_details(request.username, iam_url)
+    if beam_job.status != "success":
+        return {"status": "failed", "session_id": None, "error": beam_job.stderr, "job": beam_job.model_dump()}
 
-    return beam_job
-
-
-async def redownload_beamctl() -> Job:
-    """Re-download beamctl binary (for upgrades)."""
-    setup = get_setup_config()
-    if not setup:
-        raise RuntimeError("Setup not complete. Run initial setup first.")
-
-    beam_fqdn = setup.get("beam_cli_fqdn", "")
-    return await download_beamctl(beam_fqdn)
-
-
-async def redownload_bamctl() -> Job:
-    """Re-download bamctl binary (for upgrades)."""
-    setup = get_setup_config()
-    if not setup:
-        raise RuntimeError("Setup not complete. Run initial setup first.")
-
-    bam_fqdn = setup.get("bam_cli_fqdn", "")
-    return await download_bamctl(bam_fqdn)
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "username": request.username,
+        "job": beam_job.model_dump(),
+    }
 
 
 async def redownload_all_clis() -> dict:
-    """Re-download both beamctl and bamctl."""
-    beam_job = await redownload_beamctl()
-    bam_job = await redownload_bamctl()
-    return {
-        "beamctl": beam_job.model_dump(),
-        "bamctl": bam_job.model_dump(),
-    }
+    """Re-download both CLIs."""
+    setup = get_setup_config()
+    if not setup:
+        raise RuntimeError("Setup not complete.")
+
+    beam_job = await download_beamctl(setup.get("beam_cli_fqdn", ""))
+    bam_job = await download_bamctl(setup.get("bam_cli_fqdn", ""))
+    return {"beamctl": beam_job.model_dump(), "bamctl": bam_job.model_dump()}
 
 
 def get_setup_status() -> dict:
     config = get_setup_config()
     if not config:
         return {"setup_complete": False}
-    login_info = get_login_details()
-    if login_info:
-        config["logged_in_user"] = login_info.get("username")
+    # Check if binaries exist
+    config["beamctl_exists"] = Path(BEAMCTL_PATH).exists()
+    config["bamctl_exists"] = Path(BAMCTL_PATH).exists()
+    config["kubeconfig_exists"] = Path(KUBECONFIG_PATH).exists()
     return config
