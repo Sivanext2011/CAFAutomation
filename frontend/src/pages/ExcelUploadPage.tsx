@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, enmPushToGit, syslogGenerateConfig, syslogPushToGit, saveCertMappings, edmDestAdd } from '../api/client';
+import { downloadTemplate, exportCurrentConfig, parseExcel, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, enmPushToGit, syslogGenerateConfig, syslogPushToGit, saveCertMappings, edmDestAdd } from '../api/client';
 
 export function ExcelUploadPage() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [popup, setPopup] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
