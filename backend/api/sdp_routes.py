@@ -62,7 +62,7 @@ async def check_peer_status(data: dict):
         kube_args.extend(["--kubeconfig", kubeconfig])
 
     exec_args = kube_args + [
-        "-n", namespace, "exec", "eric-bss-cha-diameter-lb-0", "--",
+        "-n", namespace, "exec", "-i", "eric-bss-cha-diameter-lb-0", "--",
         "client", "peerlist",
     ]
 
@@ -79,10 +79,11 @@ async def check_peer_status(data: dict):
     try:
         proc = await asyncio.create_subprocess_exec(
             *exec_args,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = await proc.communicate(input=b"")
 
         job.stdout = stdout.decode("utf-8", errors="replace")
         job.stderr = stderr.decode("utf-8", errors="replace")
