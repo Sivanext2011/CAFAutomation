@@ -1,18 +1,26 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: caf-automation
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: caf-automation-data
+  namespace: caf-automation
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 2Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: caf-backend
+  namespace: caf-automation
 spec:
   replicas: 1
   selector:
@@ -35,6 +43,13 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -44,6 +59,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: caf-frontend
+  namespace: caf-automation
 spec:
   replicas: 1
   selector:
@@ -60,11 +76,19 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: caf-backend
+  namespace: caf-automation
 spec:
   selector:
     app: caf-backend
@@ -72,10 +96,12 @@ spec:
     - port: 8000
       targetPort: 8000
 ---
+# Option 1: ClusterIP (use with Ingress)
 apiVersion: v1
 kind: Service
 metadata:
   name: caf-frontend
+  namespace: caf-automation
 spec:
   selector:
     app: caf-frontend
@@ -83,13 +109,34 @@ spec:
     - port: 80
       targetPort: 80
 ---
+# Option 2: NodePort (direct access without Ingress)
+# Uncomment below and comment out the ClusterIP service above
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: caf-frontend-nodeport
+#   namespace: caf-automation
+# spec:
+#   type: NodePort
+#   selector:
+#     app: caf-frontend
+#   ports:
+#     - port: 80
+#       targetPort: 80
+#       nodePort: 30080  # Access via http://<any-node-ip>:30080
+---
+# Option 3: Ingress (recommended for production)
+# Update the host to match your cluster domain
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: caf-automation-ingress
+  namespace: caf-automation
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
 spec:
   rules:
-    - host: caf-automation.${OAM_SITE_DOMAIN}
+    - host: caf-automation.example.com  # Change to your domain
       http:
         paths:
           - path: /
