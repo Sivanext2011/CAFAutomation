@@ -357,22 +357,21 @@ export function SdpPage() {
           {statusOutput && (() => {
             // Parse peerlist output into table
             const peers: any[] = [];
-            const blocks = statusOutput.split(/\n\{/).slice(1);
+            const peerSection = statusOutput.substring(statusOutput.indexOf('peers:'));
+            const blocks = peerSection.split(/\n\{/).slice(1);
             blocks.forEach(block => {
               const entry: any = {};
-              const lines = ('{' + block).split('\n');
-              lines.forEach(line => {
-                const m = line.match(/^\s+(\w[\w\s]*):\s*(.*)$/);
+              block.split('\n').forEach(line => {
+                const m = line.match(/^[\t\s]+([\w\s]+?):\s*(.*)$/);
                 if (m) {
                   const key = m[1].trim();
-                  const val = m[2].trim().replace(/,?$/, '');
+                  const val = m[2].trim().replace(/,?\s*$/, '');
                   if (key === 'address') entry.address = val;
                   else if (key === 'realm') entry.realm = val;
                   else if (key === 'status') entry.status = val;
                   else if (key === 'use TLS') entry.tls = val;
                   else if (key === 'IP Address') entry.ipAddress = val;
                   else if (key === 'Connect Addresses') entry.connectAddresses = val;
-                  else if (key === 'application') entry.application = val;
                 }
               });
               if (entry.address) peers.push(entry);
