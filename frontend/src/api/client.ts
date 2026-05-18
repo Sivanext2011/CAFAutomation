@@ -306,12 +306,12 @@ export const syslogPushToGit = (data: any) =>
   request<any>('/syslog/push-to-git', { method: 'POST', body: JSON.stringify(data) });
 
 // Excel Integration
-export const downloadTemplate = () => fetch(`${BASE_URL}/excel/template`).then(r => r.blob());
-export const exportCurrentConfig = () => fetch(`${BASE_URL}/excel/export-current`).then(r => r.blob());
+export const downloadTemplate = () => fetch(`${BASE_URL}/excel/template`, { credentials: 'include' }).then(r => r.blob());
+export const exportCurrentConfig = () => fetch(`${BASE_URL}/excel/export-current`, { credentials: 'include' }).then(r => r.blob());
 export const parseExcel = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  return fetch(`${BASE_URL}/excel/parse`, { method: 'POST', body: formData }).then(async r => {
+  return fetch(`${BASE_URL}/excel/parse`, { method: 'POST', body: formData, credentials: 'include' }).then(async r => {
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Parse failed'); }
     return r.json();
   });
