@@ -126,13 +126,20 @@ def generate_template() -> bytes:
     ws6 = wb.create_sheet("NF Profile")
     ws6.cell(1, 1, "NF Profile Configuration").font = Font(bold=True, size=13, color="1A73E8")
     ws6.append([])
-    headers6 = ["App Group", "NF Type", "NF Status", "HeartBeat Timer", "FQDN", "IPv4 Addresses",
-                "Priority", "Capacity", "Allowed NF Types", "PLMN List (JSON)", "S-NSSAIs (JSON)",
-                "CHF Info (JSON)", "Custom Info (JSON)"]
+    headers6 = ["App Group", "NF Type", "NF Status", "HeartBeat Timer", "FQDN",
+                "IPv4 Addresses", "IPv6 Addresses", "Locality", "Priority", "Capacity",
+                "Allowed NF Types", "Allowed NF Domains", "Allowed PLMNs (JSON)", "Allowed SNPNs (JSON)",
+                "Allowed NSSAIs (JSON)", "PLMN List (JSON)", "SNPN List (JSON)", "S-NSSAIs (JSON)",
+                "Per-PLMN SNSSAI List (JSON)", "NSI List", "NF Set ID List", "Serving Scope",
+                "SCP Domains", "CHF Info (JSON)", "Custom Info (JSON)"]
     ws6.append(headers6)
     _style_header(ws6, 3, len(headers6))
-    ws6.append(["global", "CHF", "REGISTERED", "60", "chf.example.com", "10.0.0.1,10.0.0.2",
-                "0", "100", "SMF,SMSF,PCF", '[{"mcc":"240","mnc":"01"}]', '[{"sst":1}]', "", ""])
+    ws6.append(["global", "CHF", "REGISTERED", "60", "chf.example.com",
+                "10.0.0.1,10.0.0.2", "", "datacenter-1", "0", "100",
+                "SMF,SMSF,PCF", "", '[{"mcc":"240","mnc":"01"}]', "",
+                "", '[{"mcc":"240","mnc":"01"}]', "", '[{"sst":1}]',
+                "", "", "", "",
+                "", "", ""])
     _auto_width(ws6)
 
     # --- Sheet 7: ENM Integration ---
@@ -144,16 +151,29 @@ def generate_template() -> bytes:
     ws7.append(headers7)
     _style_header(ws7, 3, len(headers7))
     ws7.append(["10.0.0.100", "10.0.0.200", "162", "v2c", "public", "", "", "", "", "", ""])
+    ws7.append([])
+    ws7.append([])
+    git7 = ["Git Repo URL", "Branch", "File Path", "Git Username", "Git Token", "Commit Message"]
+    ws7.append(git7)
+    _style_settings_header(ws7, ws7.max_row, len(git7))
+    ws7.append(["", "main", "config/env/prod/values/z_eric-fh-snmp-alarm-provider.yaml", "", "", "feat: add SNMP alarm provider config"])
     _auto_width(ws7)
 
     # --- Sheet 8: Syslog ---
     ws8 = wb.create_sheet("Syslog")
     ws8.cell(1, 1, "Syslog Egress Configuration").font = Font(bold=True, size=13, color="1A73E8")
     ws8.append([])
-    headers8 = ["Host", "Port", "Protocol", "TLS Enabled", "Trust List Name", "Inclusions (JSON)"]
+    headers8 = ["Host", "Port", "Protocol", "TLS Enabled", "Trust List Name",
+                "Filter Audit", "Filter Security", "Filter All", "Inclusions (JSON)"]
     ws8.append(headers8)
     _style_header(ws8, 3, len(headers8))
-    ws8.append(["syslog.example.com", "514", "udp", "false", "", '[{"field":"log_type","value":"audit"}]'])
+    ws8.append(["syslog.example.com", "514", "udp", "false", "", "true", "true", "false", ""])
+    ws8.append([])
+    ws8.append([])
+    git8 = ["Git Repo URL", "Branch", "File Path", "Git Username", "Git Token", "Commit Message"]
+    ws8.append(git8)
+    _style_settings_header(ws8, ws8.max_row, len(git8))
+    ws8.append(["", "main", "config/env/prod/values/z_eric-log-transformer-syslog.yaml", "", "", "feat: add syslog egress config"])
     _auto_width(ws8)
 
     # --- Sheet 9: Mediation (EDM Destinations) ---
@@ -282,13 +302,33 @@ def generate_current_config(realms, peers, sub_acct_locs, partitions, nrf_server
     ws6 = wb.create_sheet("NF Profile")
     ws6.cell(1, 1, "NF Profile - Current").font = Font(bold=True, size=13, color="1A73E8")
     ws6.append([])
-    ws6.append(["App Group", "NF Type", "NF Status", "HeartBeat Timer", "FQDN", "IPv4 Addresses", "Priority", "Capacity", "Allowed NF Types"])
-    _style_header(ws6, 3, 9)
+    ws6.append(["App Group", "NF Type", "NF Status", "HeartBeat Timer", "FQDN",
+                "IPv4 Addresses", "IPv6 Addresses", "Locality", "Priority", "Capacity",
+                "Allowed NF Types", "Allowed NF Domains", "Allowed PLMNs (JSON)", "Allowed SNPNs (JSON)",
+                "Allowed NSSAIs (JSON)", "PLMN List (JSON)", "SNPN List (JSON)", "S-NSSAIs (JSON)",
+                "Per-PLMN SNSSAI List (JSON)", "NSI List", "NF Set ID List", "Serving Scope",
+                "SCP Domains", "CHF Info (JSON)", "Custom Info (JSON)"])
+    _style_header(ws6, 3, 25)
     if isinstance(nf_profiles, dict):
         for k, v in nf_profiles.items():
-            ws6.append([k, v.get("nfType", ""), v.get("nfStatus", ""), v.get("heartBeatTimer", ""),
-                        v.get("fqdn", ""), ",".join(v.get("ipv4Addresses", [])),
-                        v.get("priority", ""), v.get("capacity", ""), ",".join(v.get("allowedNfTypes", []))])
+            ws6.append([
+                k, v.get("nfType", ""), v.get("nfStatus", ""), v.get("heartBeatTimer", ""),
+                v.get("fqdn", ""), ",".join(v.get("ipv4Addresses", [])),
+                ",".join(v.get("ipv6Addresses", [])), v.get("locality", ""),
+                v.get("priority", ""), v.get("capacity", ""),
+                ",".join(v.get("allowedNfTypes", [])), ",".join(v.get("allowedNfDomains", [])),
+                json.dumps(v.get("allowedPlmns")) if v.get("allowedPlmns") else "",
+                json.dumps(v.get("allowedSnpns")) if v.get("allowedSnpns") else "",
+                json.dumps(v.get("allowedNssais")) if v.get("allowedNssais") else "",
+                json.dumps(v.get("plmnList")) if v.get("plmnList") else "",
+                json.dumps(v.get("snpnList")) if v.get("snpnList") else "",
+                json.dumps(v.get("sNssais")) if v.get("sNssais") else "",
+                json.dumps(v.get("perPlmnSnssaiList")) if v.get("perPlmnSnssaiList") else "",
+                ",".join(v.get("nsiList", [])), ",".join(v.get("nfSetIdList", [])),
+                ",".join(v.get("servingScope", [])), ",".join(v.get("scpDomains", [])),
+                json.dumps(v.get("chfInfo")) if v.get("chfInfo") else "",
+                json.dumps(v.get("customInfo")) if v.get("customInfo") else "",
+            ])
     _auto_width(ws6)
 
     buf = io.BytesIO()
@@ -446,20 +486,42 @@ def parse_excel(file_bytes: bytes) -> dict:
                 if len(row) > 3 and row[3]: profile["heartBeatTimer"] = int(row[3])
                 if len(row) > 4 and row[4]: profile["fqdn"] = str(row[4])
                 if len(row) > 5 and row[5]: profile["ipv4Addresses"] = [s.strip() for s in str(row[5]).split(",") if s.strip()]
-                if len(row) > 6 and row[6]: profile["priority"] = int(row[6])
-                if len(row) > 7 and row[7]: profile["capacity"] = int(row[7])
-                if len(row) > 8 and row[8]: profile["allowedNfTypes"] = [s.strip() for s in str(row[8]).split(",") if s.strip()]
-                if len(row) > 9 and row[9]:
-                    try: profile["plmnList"] = json.loads(str(row[9]))
-                    except: pass
-                if len(row) > 10 and row[10]:
-                    try: profile["sNssais"] = json.loads(str(row[10]))
-                    except: pass
-                if len(row) > 11 and row[11]:
-                    try: profile["chfInfo"] = json.loads(str(row[11]))
-                    except: pass
+                if len(row) > 6 and row[6]: profile["ipv6Addresses"] = [s.strip() for s in str(row[6]).split(",") if s.strip()]
+                if len(row) > 7 and row[7]: profile["locality"] = str(row[7])
+                if len(row) > 8 and row[8]: profile["priority"] = int(row[8])
+                if len(row) > 9 and row[9]: profile["capacity"] = int(row[9])
+                if len(row) > 10 and row[10]: profile["allowedNfTypes"] = [s.strip() for s in str(row[10]).split(",") if s.strip()]
+                if len(row) > 11 and row[11]: profile["allowedNfDomains"] = [s.strip() for s in str(row[11]).split(",") if s.strip()]
                 if len(row) > 12 and row[12]:
-                    try: profile["customInfo"] = json.loads(str(row[12]))
+                    try: profile["allowedPlmns"] = json.loads(str(row[12]))
+                    except: pass
+                if len(row) > 13 and row[13]:
+                    try: profile["allowedSnpns"] = json.loads(str(row[13]))
+                    except: pass
+                if len(row) > 14 and row[14]:
+                    try: profile["allowedNssais"] = json.loads(str(row[14]))
+                    except: pass
+                if len(row) > 15 and row[15]:
+                    try: profile["plmnList"] = json.loads(str(row[15]))
+                    except: pass
+                if len(row) > 16 and row[16]:
+                    try: profile["snpnList"] = json.loads(str(row[16]))
+                    except: pass
+                if len(row) > 17 and row[17]:
+                    try: profile["sNssais"] = json.loads(str(row[17]))
+                    except: pass
+                if len(row) > 18 and row[18]:
+                    try: profile["perPlmnSnssaiList"] = json.loads(str(row[18]))
+                    except: pass
+                if len(row) > 19 and row[19]: profile["nsiList"] = [s.strip() for s in str(row[19]).split(",") if s.strip()]
+                if len(row) > 20 and row[20]: profile["nfSetIdList"] = [s.strip() for s in str(row[20]).split(",") if s.strip()]
+                if len(row) > 21 and row[21]: profile["servingScope"] = [s.strip() for s in str(row[21]).split(",") if s.strip()]
+                if len(row) > 22 and row[22]: profile["scpDomains"] = [s.strip() for s in str(row[22]).split(",") if s.strip()]
+                if len(row) > 23 and row[23]:
+                    try: profile["chfInfo"] = json.loads(str(row[23]))
+                    except: pass
+                if len(row) > 24 and row[24]:
+                    try: profile["customInfo"] = json.loads(str(row[24]))
                     except: pass
                 entries.append(profile)
         result["nfProfile"] = entries
@@ -469,10 +531,27 @@ def parse_excel(file_bytes: bytes) -> dict:
         ws = wb["ENM"]
         rows = list(ws.iter_rows(values_only=True))
         entries = []
+        git_config = {}
         data_found = False
+        git_found = False
         for row in rows:
             if row and row[0] and str(row[0]).strip().lower() == "oam ingress ip":
                 data_found = True
+                continue
+            if row and row[0] and str(row[0]).strip().lower() == "git repo url":
+                git_found = True
+                data_found = False
+                continue
+            if git_found and row and (row[0] or row[1]):
+                git_config = {
+                    "repoUrl": str(row[0] or ""),
+                    "branch": str(row[1] or "main"),
+                    "filePath": str(row[2] or ""),
+                    "username": str(row[3] or ""),
+                    "token": str(row[4] or ""),
+                    "commitMessage": str(row[5] or "") if len(row) > 5 else "",
+                }
+                git_found = False
                 continue
             if data_found and row and row[0]:
                 entry = {
@@ -489,17 +568,34 @@ def parse_excel(file_bytes: bytes) -> dict:
                 if len(row) > 9 and row[9]: entry["privProtocol"] = str(row[9])
                 if len(row) > 10 and row[10]: entry["privPassword"] = str(row[10])
                 entries.append(entry)
-        result["enm"] = entries
+        result["enm"] = {"entries": entries, "git": git_config}
 
     # --- Syslog ---
     if "Syslog" in wb.sheetnames:
         ws = wb["Syslog"]
         rows = list(ws.iter_rows(values_only=True))
         entries = []
+        git_config = {}
         data_found = False
+        git_found = False
         for row in rows:
             if row and row[0] and str(row[0]).strip().lower() == "host":
                 data_found = True
+                continue
+            if row and row[0] and str(row[0]).strip().lower() == "git repo url":
+                git_found = True
+                data_found = False
+                continue
+            if git_found and row and (row[0] or row[1]):
+                git_config = {
+                    "repoUrl": str(row[0] or ""),
+                    "branch": str(row[1] or "main"),
+                    "filePath": str(row[2] or ""),
+                    "username": str(row[3] or ""),
+                    "token": str(row[4] or ""),
+                    "commitMessage": str(row[5] or "") if len(row) > 5 else "",
+                }
+                git_found = False
                 continue
             if data_found and row and row[0]:
                 entry = {
@@ -508,12 +604,15 @@ def parse_excel(file_bytes: bytes) -> dict:
                     "protocol": str(row[2] or "udp"),
                     "tlsEnabled": str(row[3] or "false").lower() == "true" if len(row) > 3 else False,
                     "trustListName": str(row[4] or "") if len(row) > 4 else "",
+                    "filterAudit": str(row[5] or "true").lower() == "true" if len(row) > 5 else True,
+                    "filterSecurity": str(row[6] or "true").lower() == "true" if len(row) > 6 else True,
+                    "filterAll": str(row[7] or "false").lower() == "true" if len(row) > 7 else False,
                 }
-                if len(row) > 5 and row[5]:
-                    try: entry["inclusions"] = json.loads(str(row[5]))
+                if len(row) > 8 and row[8]:
+                    try: entry["inclusions"] = json.loads(str(row[8]))
                     except: pass
                 entries.append(entry)
-        result["syslog"] = entries
+        result["syslog"] = {"entries": entries, "git": git_config}
 
     # --- Mediation ---
     if "Mediation" in wb.sheetnames:

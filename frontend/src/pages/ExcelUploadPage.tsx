@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, syslogGenerateConfig, saveCertMappings, edmDestAdd } from '../api/client';
+import { downloadTemplate, exportCurrentConfig, parseExcel, deployNrfConfiguration, updateSdpRealms, updateSdpPeers, addNrfServer, addNrfOauthServer, updateNfProfileConfig, bulkCreateSubAcctLoc, enmGenerateSnmpConfig, enmPushToGit, syslogGenerateConfig, syslogPushToGit, saveCertMappings, edmDestAdd } from '../api/client';
 
 export function ExcelUploadPage() {
   const navigate = useNavigate();
@@ -137,19 +137,32 @@ export function ExcelUploadPage() {
       }
 
       // ENM
-      if (parsed.enm?.length) {
-        for (const e of parsed.enm) {
-          await enmGenerateSnmpConfig(e);
+      if (parsed.enm?.entries?.length) {
+        for (const e of parsed.enm.entries) {
+          const r = await enmGenerateSnmpConfig(e);
+          // If git config provided, push to git
+          if (parsed.enm.git?.repoUrl && r.yaml) {
+            await enmPushToGit({ ...parsed.enm.git, yamlContent: r.yaml });
+          }
         }
-        results.push(`ENM: ${parsed.enm.length} config(s) generated`);
+        results.push(`ENM: ${parsed.enm.entries.length} config(s)`);
       }
 
       // Syslog
-      if (parsed.syslog?.length) {
-        for (const s of parsed.syslog) {
-          await syslogGenerateConfig(s);
+      if (parsed.syslog?.entries?.length) {
+        for (const s of parsed.syslog.entries) {
+          const inclusions: any[] = [];
+          if (!s.filterAll) {
+            if (s.filterAudit) inclusions.push({ field: 'log_type', value: 'audit' });
+            if (s.filterSecurity) inclusions.push({ field: 'log_type', value: 'security' });
+          }
+          const payload = { host: s.host, port: s.port, protocol: s.protocol, tlsEnabled: s.tlsEnabled, trustListName: s.trustListName, inclusions: s.inclusions || inclusions };
+          const r = await syslogGenerateConfig(payload);
+          if (parsed.syslog.git?.repoUrl && r.yaml) {
+            await syslogPushToGit({ ...parsed.syslog.git, yamlContent: r.yaml });
+          }
         }
-        results.push(`Syslog: ${parsed.syslog.length} config(s) generated`);
+        results.push(`Syslog: ${parsed.syslog.entries.length} config(s)`);
       }
 
       // Mediation
@@ -212,8 +225,8 @@ export function ExcelUploadPage() {
   const oauthCount = parsed?.oauthServers?.length || 0;
   const nfCount = parsed?.nfProfile?.length || 0;
   const diaCount = parsed?.diameter?.entries?.length || 0;
-  const enmCount = parsed?.enm?.length || 0;
-  const syslogCount = parsed?.syslog?.length || 0;
+  const enmCount = parsed?.enm?.entries?.length || 0;
+  const syslogCount = parsed?.syslog?.entries?.length || 0;
   const certCount = parsed?.certificates?.length || 0;
   const medCount = parsed?.mediation?.entries?.length || 0;
 
@@ -304,10 +317,10 @@ export function ExcelUploadPage() {
           {/* ENM Preview */}
           {enmCount > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>ENM ({enmCount})</label>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>ENM ({enmCount}){parsed.enm?.git?.repoUrl ? ' + Git Push' : ''}</label>
               <table className="data-table" style={{ marginTop: 4 }}>
                 <thead><tr><th>OAM IP</th><th>ENM VIP</th><th>Port</th><th>Version</th></tr></thead>
-                <tbody>{parsed.enm.map((e: any, i: number) => <tr key={i}><td>{e.oamIngressIp}</td><td>{e.enmFmVip}</td><td>{e.enmPort}</td><td>{e.version}</td></tr>)}</tbody>
+                <tbody>{parsed.enm.entries.map((e: any, i: number) => <tr key={i}><td>{e.oamIngressIp}</td><td>{e.enmFmVip}</td><td>{e.enmPort}</td><td>{e.version}</td></tr>)}</tbody>
               </table>
             </div>
           )}
@@ -315,10 +328,10 @@ export function ExcelUploadPage() {
           {/* Syslog Preview */}
           {syslogCount > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>Syslog ({syslogCount})</label>
+              <label style={{ color: '#4fc3f7', fontSize: 11, fontWeight: 600 }}>Syslog ({syslogCount}){parsed.syslog?.git?.repoUrl ? ' + Git Push' : ''}</label>
               <table className="data-table" style={{ marginTop: 4 }}>
-                <thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>TLS</th></tr></thead>
-                <tbody>{parsed.syslog.map((s: any, i: number) => <tr key={i}><td>{s.host}</td><td>{s.port}</td><td>{s.protocol}</td><td>{String(s.tlsEnabled)}</td></tr>)}</tbody>
+                <thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>TLS</th><th>Filters</th></tr></thead>
+                <tbody>{parsed.syslog.entries.map((s: any, i: number) => <tr key={i}><td>{s.host}</td><td>{s.port}</td><td>{s.protocol}</td><td>{String(s.tlsEnabled)}</td><td style={{ fontSize: 10 }}>{s.filterAll ? 'All' : [s.filterAudit && 'Audit', s.filterSecurity && 'Security'].filter(Boolean).join(', ') || 'None'}</td></tr>)}</tbody>
               </table>
             </div>
           )}
