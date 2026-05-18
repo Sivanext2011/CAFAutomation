@@ -357,25 +357,35 @@ export function SdpPage() {
           {statusOutput && (() => {
             // Parse peerlist output into table
             const peers: any[] = [];
-            const peerSection = statusOutput.substring(statusOutput.indexOf('peers:'));
-            const blocks = peerSection.split(/\n\{/).slice(1);
-            blocks.forEach(block => {
-              const entry: any = {};
-              block.split('\n').forEach(line => {
-                const m = line.match(/^[\t\s]+([\w\s]+?):\s*(.*)$/);
-                if (m) {
-                  const key = m[1].trim();
-                  const val = m[2].trim().replace(/,?\s*$/, '');
-                  if (key === 'address') entry.address = val;
-                  else if (key === 'realm') entry.realm = val;
-                  else if (key === 'status') entry.status = val;
-                  else if (key === 'use TLS') entry.tls = val;
-                  else if (key === 'IP Address') entry.ipAddress = val;
-                  else if (key === 'Connect Addresses') entry.connectAddresses = val;
-                }
-              });
-              if (entry.address) peers.push(entry);
-            });
+            const peerIdx = statusOutput.indexOf('peers:');
+            if (peerIdx >= 0) {
+              const peerSection = statusOutput.substring(peerIdx);
+              // Split by lines that start with { (with optional whitespace)
+              const regex = /address:\s*(.+?)\n[\s\t]*realm:\s*(.+?)\n[\s\t]*application:\s*(.+?)\n[\s\t]*status:\s*(.+?)\n[\s\t]*use TLS:\s*(.+?)\n[\s\t]*IP Address:(.+?)\n[\s\t]*Connect Addresses:(.+?)\n/g;
+              let match;
+              while ((match = regex.exec(peerSection)) !== null) {
+                peers.push({
+                  address: match[1].trim(),
+                  realm: match[2].trim(),
+                  status: match[3 + 1].trim().replace(/,/g, ''),
+                  tls: match[4 + 1].trim().replace(/,/g, ''),
+                  connectAddresses: match[6 + 1].trim().replace(/,\s*$/, ''),
+                });
+              }
+              // Fallback: try line-by-line parsing
+              if (peers.length === 0) {
+                let current: any = {};
+                peerSection.split('\n').forEach(line => {
+                  const stripped = line.replace(/[\r\x00]/g, '').trim();
+                  if (stripped.startsWith('address:')) { if (current.address) peers.push(current); current = { address: stripped.substring(8).trim() }; }
+                  else if (stripped.startsWith('realm:')) current.realm = stripped.substring(6).trim();
+                  else if (stripped.startsWith('status:')) current.status = stripped.substring(7).trim().replace(/,/g, '');
+                  else if (stripped.startsWith('use TLS:')) current.tls = stripped.substring(8).trim().replace(/,/g, '');
+                  else if (stripped.startsWith('Connect Addresses:')) current.connectAddresses = stripped.substring(18).trim().replace(/,\s*$/, '');
+                });
+                if (current.address) peers.push(current);
+              }
+            }
 
             if (peers.length === 0) return <div className="console" style={{ whiteSpace: 'pre-wrap' }}>{statusOutput}</div>;
 
